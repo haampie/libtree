@@ -207,9 +207,9 @@ void parse_ld_conf(fs::path conf, std::vector<fs::path> &directories) {
     }
 }
 
-std::vector<fs::path> parse_ld_conf() {
+std::vector<fs::path> parse_ld_conf(std::string_view path) {
     std::vector<fs::path> directories;
-    parse_ld_conf("/etc/ld.so.conf", directories);
+    parse_ld_conf(path, directories);
     return directories;
 }
 
@@ -319,10 +319,6 @@ private:
 };
 
 int main(int argc, char ** argv) {
-    auto search_directories = parse_ld_conf();
-
-    search_directories.push_back("/lib");
-    search_directories.push_back("/usr/lib");
 
     cxxopts::Options options("bundler", "Bundle binaries to a small bundle for linux");
 
@@ -370,6 +366,10 @@ int main(int argc, char ** argv) {
     }
 
     std::vector<fs::path> ld_library_paths;
+
+    auto search_directories = parse_ld_conf(result["ldconf"].as<std::string>());
+    search_directories.push_back("/lib");
+    search_directories.push_back("/usr/lib");
 
     DepsTree tree{std::move(pool), std::move(search_directories), std::move(ld_library_paths)};
 }

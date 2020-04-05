@@ -1,6 +1,13 @@
 # bundler
 
-Bundle executables and libraries to a single folder.
+A tool to bundle your binaries, useful for building small Docker containers or AppImages.
+
+Current functionality:
+- [x] Add executables with `-e` and libraries via `-l`
+- [x] Walks the dependency tree like `ld.so` (handles `RPATH`, `RUNPATH` and `LD_LIBRARY_PATH` correctly).
+- [x] Uses `/etc/ld.so.conf` or any custom conf file via `-ldconf /path/to/ld.so.conf`
+- [x] Skips blacklisted dependencies (and their dependencies) such as libc.so and libstdc++.so.
+- [ ] Deploy binaries and rewrite their `RUNPATH`s.
 
 ```bash
 git clone --recursive https://github.com/haampie/bundler.git
