@@ -1,0 +1,3 @@
+[submodule "deps/cppglob"]
+	path = deps/cppglob
+	url = git@github.com:Kogia-sima/cppglob.git
