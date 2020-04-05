@@ -1,3 +1,6 @@
 [submodule "deps/cppglob"]
 	path = deps/cppglob
 	url = git@github.com:Kogia-sima/cppglob.git
+[submodule "deps/ELFIO"]
+	path = deps/ELFIO
+	url = git@github.com:serge1/ELFIO.git

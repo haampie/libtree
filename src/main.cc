@@ -13,11 +13,14 @@
 #include <array>
 #include <fstream>
 
-#include <sys/auxv.h>
-
 #include <cxxopts/cxxopts.hpp>
 #include <termcolor/termcolor.hpp>
 #include <cppglob/glob.hpp>
+
+#include <elfio/elfio.hpp>
+#include <elfio/elfio_dump.hpp>
+
+#include "excludelist.h"
 
 namespace fs = std::filesystem;
 
@@ -25,6 +28,7 @@ enum class deploy_t { EXECUTABLE, LIBRARY };
 
 struct Elf {
     deploy_t type;
+    std::string name;
     fs::path abs_path;
     std::vector<fs::path> runpaths;
     std::vector<fs::path> rpaths;
@@ -99,56 +103,59 @@ std::vector<fs::path> split_paths(std::string const &raw_rpath, fs::path cwd) {
     return rpaths;
 }
 
-std::optional<Elf> from_path(deploy_t type, std::string_view path_str) {
+std::optional<Elf> from_path(deploy_t type, fs::path path_str) {
+    // Extract some data from the elf file.
+    std::vector<fs::path> needed, rpaths, runpaths;
+
+    // Make sure the path is fully canonicalized
     auto binary_path = fs::canonical(path_str);
     auto cwd = fs::path(binary_path).remove_filename();
 
-    // Read the NEEDED, RPATH and RUNPATH sections
-	std::stringstream cmd;
-    cmd << "readelf -d " << binary_path.u8string();
-    auto result = exec(cmd.str().c_str());
+    // use the filename, or the soname if it exists to uniquely identify a shared lib
+    std::string name =  path_str.filename();
 
-    // NEEDED
-    std::vector<fs::path> needed;
-    {
-        std::regex regex(R"(NEEDED.*?\[(.*?)\])");
-        auto begin = std::sregex_iterator(result.begin(), result.end(), regex);
-        auto end = std::sregex_iterator();
+    // Try to load the ELF file
+    ELFIO::elfio elf;
+    if (!elf.load(binary_path.string()) || elf.get_class() != ELFCLASS64)
+        return std::nullopt;
 
-        for (auto match = begin; match != end; ++match)
-            needed.push_back(fs::path{(*match)[1]});
-    }
+    // Loop over the sections
+    for (ELFIO::Elf_Half i = 0; i < elf.sections.size(); ++i) {
+        ELFIO::section* sec = elf.sections[i];
+        if ( SHT_DYNAMIC == sec->get_type() ) {
+            ELFIO::dynamic_section_accessor dynamic(elf, sec);
 
-    // RPATH
-    std::vector<fs::path> rpaths;
-    {
-        std::regex regex(R"(RPATH.*?\[(.*?)\])");
-        auto begin = std::sregex_iterator(result.begin(), result.end(), regex);
-        auto end = std::sregex_iterator();
+            ELFIO::Elf_Xword dyn_no = dynamic.get_entries_num();
 
-        for (auto match = begin; match != end; ++match) {
-            auto submatch = (*match)[1];
-            for (auto const &path : split_paths(submatch, cwd))
-                rpaths.push_back(path);
+            // Find the dynamic section
+            if (dyn_no <= 0)
+                continue;
+
+            // Loop over the entries
+            for (ELFIO::Elf_Xword i = 0; i < dyn_no; ++i) {
+                ELFIO::Elf_Xword tag   = 0;
+                ELFIO::Elf_Xword value = 0;
+                std::string str;
+                dynamic.get_entry(i, tag, value, str);
+
+                if (tag == DT_NEEDED) {
+                    needed.push_back(str);
+                } else if (tag == DT_RUNPATH) {
+                    for (auto const &path : split_paths(str, cwd))
+                        runpaths.push_back(path);
+                } else if (tag == DT_RPATH) {
+                    for (auto const &path : split_paths(str, cwd))
+                        rpaths.push_back(path);
+                } else if (tag == DT_SONAME) {
+                    name = str;
+                } else if (tag == DT_NULL) {
+                    break;
+                }
+            }
         }
     }
 
-    // RUNPATH
-    std::vector<fs::path> runpaths;
-    {
-        std::regex regex(R"(RUNPATH.*?\[(.*?)\])");
-        auto begin = std::sregex_iterator(result.begin(), result.end(), regex);
-        auto end = std::sregex_iterator();
-
-        for (auto match = begin; match != end; ++match) {
-            auto submatch = (*match)[1];
-            for (auto const &path : split_paths(submatch, cwd))
-                runpaths.push_back(path);
-        }
-    }
-
-
-    return Elf{type, binary_path, runpaths, rpaths, needed};
+    return Elf{type, name, binary_path, runpaths, rpaths, needed};
 }
 
 std::string_view trim_ld_line(std::string_view line) {
@@ -220,14 +227,21 @@ private:
     void explore(Elf const &elf, std::vector<fs::path> &rpaths, size_t depth = 0) {
         auto indent = std::string(depth, ' ');
 
-        // Early return if already visited?
-        if (m_visited.count(elf.abs_path) > 0)
-            return;
+        auto cached = m_visited.count(elf.name) > 0;
+        auto search = std::find(generatedExcludelist.begin(), generatedExcludelist.end(), elf.name);
+        auto excluded = search != generatedExcludelist.end();
 
-        m_visited.insert(elf.abs_path);
+        std::cout << indent << (excluded ? termcolor::red : cached ? termcolor::blue : termcolor::green) << elf.name << (excluded ? " (excluded)\n" : cached ? " (cached)\n" : "\n") << termcolor::reset;
+
+        // Early return if already visited?
+        if (cached || excluded) return;
+
+        // Cache
+        m_visited.insert(elf.name);
 
         // Append the rpaths of the current ELF file.
         std::copy(elf.rpaths.begin(), elf.rpaths.end(), std::back_inserter(rpaths));
+
         // Prepare all search paths in the correct order
         std::vector<fs::path> all_paths;
 
@@ -245,19 +259,31 @@ private:
         std::copy(m_search_paths.begin(), m_search_paths.end(), std::back_inserter(all_paths));
 
         for (auto const &so : elf.needed) {
-            std::cout << indent << so.string() << '\n';
-
             // If empty, skip
             if (so.begin() == so.end())
                 continue;
 
-            // If there is a slash, interpret this as a relative path
-            if (++so.begin() != so.end()) {
-                std::cout << indent << "TODO: Follow relative path" << so << '\n';
-                continue;
-            }
+            auto result = [&](){
 
-            auto result = try_paths(all_paths, so);
+                // If it is a path (more than just a so name), follow this.
+                if (++so.begin() != so.end()) {
+                    auto full_path = so; 
+
+                    if (so.is_relative()) {
+                        auto cwd = elf.abs_path;
+                        cwd.remove_filename();
+                        full_path = cwd / so;
+                    }
+
+                    return fs::exists(full_path) ? from_path(deploy_t::LIBRARY, full_path.string())
+                                                 : std::nullopt;
+                } else {
+                    try_paths(all_paths, so);
+                }
+
+
+                return try_paths(all_paths, so);
+            }();
 
             if (result)
                 explore(*result, rpaths, depth + 1);
@@ -304,17 +330,9 @@ int main(int argc, char ** argv) {
       ("d,destination", "Destination", cxxopts::value<std::string>())
       ("e,executable", "Executable", cxxopts::value<std::vector<std::string>>())
       ("l,library", "Shared library", cxxopts::value<std::vector<std::string>>())
-      ("ldconf", "Path to ld.conf", cxxopts::value<std::string>()->default_value("/etc/ld.so.conf"))
-      ("p,platform", "Platform (e.g. x86_64). If not provided this will be inferred from the auxiliary vector", cxxopts::value<std::string>());
+      ("ldconf", "Path to ld.conf", cxxopts::value<std::string>()->default_value("/etc/ld.so.conf"));
 
     auto result = options.parse(argc, argv);
-
-    std::string const platform = [&](){
-        if (result.count("platform") != 0)
-            return result["platform"].as<std::string>();
-
-        return std::string(reinterpret_cast<char const *>(getauxval(AT_PLATFORM)));
-    }();
 
     if (result.count("destination") == 0)
         return -1;
@@ -344,7 +362,6 @@ int main(int argc, char ** argv) {
                 pool.push_back(*val);
         }
     }
-
 
     std::vector<fs::path> ld_library_paths;
 
