@@ -330,20 +330,21 @@ int main(int argc, char ** argv) {
       ("d,destination", "Destination", cxxopts::value<std::string>())
       ("e,executable", "Executable", cxxopts::value<std::vector<std::string>>())
       ("l,library", "Shared library", cxxopts::value<std::vector<std::string>>())
+      ("r,exclude", "Exclude library", cxxopts::value<std::vector<std::string>>())
       ("ldconf", "Path to ld.conf", cxxopts::value<std::string>()->default_value("/etc/ld.so.conf"));
 
     auto result = options.parse(argc, argv);
 
-    if (result.count("destination") == 0)
-        return -1;
-
-    // Create the basic structure of the deploy dir
-    fs::path usr_dir = fs::path(result["destination"].as<std::string>()) / "usr";
-    fs::path bin_dir = usr_dir / "bin";
-    fs::path lib_dir = usr_dir / "lib";
-
-    fs::create_directories(bin_dir);
-    fs::create_directories(lib_dir);
+//    if (result.count("destination") == 0)
+//        return -1;
+//
+//    // Create the basic structure of the deploy dir
+//    fs::path usr_dir = fs::path(result["destination"].as<std::string>()) / "usr";
+//    fs::path bin_dir = usr_dir / "bin";
+//    fs::path lib_dir = usr_dir / "lib";
+//
+//    fs::create_directories(bin_dir);
+//    fs::create_directories(lib_dir);
 
     std::vector<Elf> pool;
 
@@ -361,6 +362,11 @@ int main(int argc, char ** argv) {
             if (val != std::nullopt)
                 pool.push_back(*val);
         }
+    }
+
+    if (result["exclude"].count()) {
+        auto const &list = result["exclude"].as<std::vector<std::string>>();
+        std::copy(list.begin(), list.end(), std::back_inserter(generatedExcludelist));
     }
 
     std::vector<fs::path> ld_library_paths;

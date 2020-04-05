@@ -50,7 +50,7 @@ cat > "$tempfile" <<\EOF
 #include <string>
 #include <vector>
 
-static const std::vector<std::string> generatedExcludelist = {
+static std::vector<std::string> generatedExcludelist = {
 EOF
 
 # create array
