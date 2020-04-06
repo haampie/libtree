@@ -24,7 +24,7 @@ jobs:
     - name: Bundle
       run: |
         ./build/bundler -e ./build/bundler -d bundler
-        tar -zcvf bundler.tar.gz bundler
+        tar -zcvf bundler_x86_64.tar.gz bundler
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
@@ -42,6 +42,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./bundler.tar.gz
-        asset_name: bundler.tar.gz
+        asset_path: ./bundler_x86_64.tar.gz
+        asset_name: bundler_x86_64.tar.gz
         asset_content_type: application/gzip
