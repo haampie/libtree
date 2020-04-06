@@ -16,7 +16,11 @@ jobs:
     - name: build-env
       run: sudo apt-get update -qq && sudo apt-get install -qq g++-8
     - name: build
-      run: mkdir build && cd build && CC=g++-8 cmake -DCMAKE_BUILD_TYPE="Release" .. && make -j$(nproc)
+      run: |
+          mkdir build 
+          cd build 
+          CC=g++-8 cmake -DCMAKE_BUILD_TYPE="Release" .. 
+          make -j$(nproc)
     - name: bundle
       run: ./build/bundler -e ./build/bundler -d bundler
     - name: test
