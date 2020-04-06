@@ -78,15 +78,17 @@ struct PathHash {
 
 // Applies substitutions like $ORIGIN := current work directory
 fs::path apply_substitutions(fs::path const &rpath, fs::path const &cwd) {
-    if (rpath.begin() == rpath.end() || *rpath.begin() != "$ORIGIN")
-        return rpath;
+	std::string path = rpath;
 
-    fs::path concatted_path = cwd;
+	std::regex origin{"\\$(ORIGIN|\\{ORIGIN\\})"};
+	std::regex lib{"\\$(LIB|\\{LIB\\})"};
+	std::regex platform{"\\$(PLATFORM|\\{PLATFORM\\})"};
+	
+	path = std::regex_replace(path, origin, cwd.string());
+	path = std::regex_replace(path, lib, "lib64");
+	path = std::regex_replace(path, platform, "x86_64");
 
-    for (auto it = ++rpath.begin(); it != rpath.end(); ++it)
-        concatted_path /= *it;
-
-    return concatted_path;
+	return path;
 }
 
 // Turns path1:path2 into [path1, path2]
@@ -213,6 +215,13 @@ std::vector<fs::path> parse_ld_conf(std::string_view path) {
     return directories;
 }
 
+ std::string repeat(std::string_view input, size_t num)
+ {
+    std::ostringstream os;
+    std::fill_n(std::ostream_iterator<std::string_view>(os), num, input);
+    return os.str();
+ }
+
 class DepsTree {
 
 public:
@@ -223,21 +232,27 @@ public:
             explore(elf, rpaths);
     }
 
+    std::vector<Elf> const &get_deps() const {
+        return m_all_binaries;
+    }
+
+
 private:
     void explore(Elf const &elf, std::vector<fs::path> &rpaths, size_t depth = 0) {
-        auto indent = std::string(depth, ' ');
+        auto indent = repeat("|  ", depth == 0 ? 0 : depth - 1) + (depth == 0 ? "" : "|--");
 
         auto cached = m_visited.count(elf.name) > 0;
         auto search = std::find(generatedExcludelist.begin(), generatedExcludelist.end(), elf.name);
         auto excluded = search != generatedExcludelist.end();
 
-        std::cout << indent << (excluded ? termcolor::red : cached ? termcolor::blue : termcolor::green) << elf.name << (excluded ? " (excluded)\n" : cached ? " (cached)\n" : "\n") << termcolor::reset;
+        std::cout << indent << (excluded ? termcolor::red : cached ? termcolor::blue : termcolor::green) << elf.name << (excluded ? " (excluded)\n" : cached ? " (visited)\n" : "\n") << termcolor::reset;
 
         // Early return if already visited?
         if (cached || excluded) return;
 
         // Cache
         m_visited.insert(elf.name);
+        m_all_binaries.push_back(elf);
 
         // Append the rpaths of the current ELF file.
         std::copy(elf.rpaths.begin(), elf.rpaths.end(), std::back_inserter(rpaths));
@@ -278,11 +293,8 @@ private:
                     return fs::exists(full_path) ? from_path(deploy_t::LIBRARY, full_path.string())
                                                  : std::nullopt;
                 } else {
-                    try_paths(all_paths, so);
+                    return try_paths(all_paths, so);
                 }
-
-
-                return try_paths(all_paths, so);
             }();
 
             if (result)
@@ -316,7 +328,30 @@ private:
     std::vector<fs::path> m_search_paths;
     std::vector<fs::path> m_ld_library_paths;
     std::unordered_set<fs::path, PathHash> m_visited;
+
+    std::vector<Elf> m_all_binaries;
 };
+
+// Copy binaries over, change their rpath if they have it, and strip them
+void deploy(std::vector<Elf> const &deps, fs::path const &bin, fs::path const &lib) {
+    for (auto const &elf : deps) {
+        fs::path new_path = (elf.type == deploy_t::EXECUTABLE ? bin : lib) / elf.name;
+        fs::copy_file(elf.abs_path, new_path, fs::copy_options::overwrite_existing);
+
+        std::cout << termcolor::green << elf.abs_path << termcolor::reset << " => " << termcolor::green << new_path << termcolor::reset << '\n';
+
+        auto rpath = (elf.type == deploy_t::EXECUTABLE ? "\\$ORIGIN/../lib" : "\\$ORIGIN");
+
+		// Silently patch the rpath and strip things; let's not care if it fails.
+        std::stringstream chrpath;
+        chrpath << "chrpath -c -r \"" << rpath << "\" " << new_path;
+        exec(chrpath.str().c_str());
+
+        std::stringstream strip;
+        strip << "strip " << new_path;
+        exec(strip.str().c_str());
+    }
+}
 
 int main(int argc, char ** argv) {
 
@@ -330,17 +365,6 @@ int main(int argc, char ** argv) {
       ("ldconf", "Path to ld.conf", cxxopts::value<std::string>()->default_value("/etc/ld.so.conf"));
 
     auto result = options.parse(argc, argv);
-
-//    if (result.count("destination") == 0)
-//        return -1;
-//
-//    // Create the basic structure of the deploy dir
-//    fs::path usr_dir = fs::path(result["destination"].as<std::string>()) / "usr";
-//    fs::path bin_dir = usr_dir / "bin";
-//    fs::path lib_dir = usr_dir / "lib";
-//
-//    fs::create_directories(bin_dir);
-//    fs::create_directories(lib_dir);
 
     std::vector<Elf> pool;
 
@@ -367,9 +391,27 @@ int main(int argc, char ** argv) {
 
     std::vector<fs::path> ld_library_paths;
 
+    // Default search paths is ldconfig + /lib + /usr/lib
     auto search_directories = parse_ld_conf(result["ldconf"].as<std::string>());
     search_directories.push_back("/lib");
     search_directories.push_back("/usr/lib");
 
+    // Walk the dependency tree
+    std::cout << termcolor::bold << "Dependency tree" << termcolor::reset << '\n';
     DepsTree tree{std::move(pool), std::move(search_directories), std::move(ld_library_paths)};
+
+    std::cout << '\n';
+
+    // And deploy the binaries if requested.
+    std::cout << termcolor::bold << "Deploying" << termcolor::reset << '\n';
+    if (result.count("destination") == 1) {
+        fs::path usr_dir = fs::path(result["destination"].as<std::string>()) / "usr";
+        fs::path bin_dir = usr_dir / "bin";
+        fs::path lib_dir = usr_dir / "lib";
+
+        fs::create_directories(bin_dir);
+        fs::create_directories(lib_dir);
+
+        deploy(tree.get_deps(), bin_dir, lib_dir);
+    }
 }
