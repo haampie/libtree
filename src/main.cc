@@ -109,16 +109,15 @@ std::optional<Elf> from_path(deploy_t type, fs::path path_str) {
     // Extract some data from the elf file.
     std::vector<fs::path> needed, rpaths, runpaths;
 
-    // Make sure the path is fully canonicalized
-    auto binary_path = fs::canonical(path_str);
-    auto cwd = fs::path(binary_path).remove_filename();
+    // Make sure the path is absolute for substitutions
+    auto cwd = fs::absolute(path_str).remove_filename();
 
     // use the filename, or the soname if it exists to uniquely identify a shared lib
     std::string name =  path_str.filename();
 
     // Try to load the ELF file
     ELFIO::elfio elf;
-    if (!elf.load(binary_path.string()) || elf.get_class() != ELFCLASS64)
+    if (!elf.load(path_str.string()) || elf.get_class() != ELFCLASS64)
         return std::nullopt;
 
     // Loop over the sections
@@ -157,7 +156,7 @@ std::optional<Elf> from_path(deploy_t type, fs::path path_str) {
         }
     }
 
-    return Elf{type, name, binary_path, runpaths, rpaths, needed};
+    return Elf{type, name, path_str, runpaths, rpaths, needed};
 }
 
 std::string_view trim_ld_line(std::string_view line) {
@@ -299,8 +298,13 @@ private:
 
             if (result)
                 explore(*result, rpaths, depth + 1);
-            else
+            else {
                 std::cout << indent << "ERROR could not find " << so << '\n';
+                std::cout << "Search paths: ";
+                std::copy(all_paths.begin(), all_paths.end(), std::ostream_iterator<fs::path>(std::cout, "\n"));
+                std::cout << "RUNPATHS: ";
+                std::copy(elf.runpaths.begin(), elf.runpaths.end(), std::ostream_iterator<fs::path>(std::cout, "\n"));
+            }
         }
     }
 
@@ -335,20 +339,34 @@ private:
 // Copy binaries over, change their rpath if they have it, and strip them
 void deploy(std::vector<Elf> const &deps, fs::path const &bin, fs::path const &lib, fs::path const &strip, fs::path const &chrpath) {
     for (auto const &elf : deps) {
-        fs::path new_path = (elf.type == deploy_t::EXECUTABLE ? bin : lib) / elf.name;
-        fs::copy_file(elf.abs_path, new_path, fs::copy_options::overwrite_existing);
 
-        std::cout << termcolor::green << elf.abs_path << termcolor::reset << " => " << termcolor::green << new_path << termcolor::reset << '\n';
+        // Go through all symlinks.
+        auto canonical = fs::canonical(elf.abs_path);
+
+        //Copy to the deploy folder
+        auto deploy_folder = (elf.type == deploy_t::EXECUTABLE ? bin : lib);
+        auto deploy_path = deploy_folder / canonical.filename();
+        fs::copy_file(canonical, deploy_path, fs::copy_options::overwrite_existing);
+
+        std::cout << termcolor::green << canonical << termcolor::reset << " => " << termcolor::green << deploy_path << termcolor::reset << '\n';
+        // Create all symlinks
+        for (auto link = elf.abs_path; fs::is_symlink(link); link = fs::read_symlink(link)) {
+            auto link_destination = deploy_folder / link.filename();
+            fs::remove(link_destination);
+            fs::create_symlink(deploy_path.filename(), link_destination);
+
+            std::cout << "  " << termcolor::yellow << "creating symlink " << link_destination << '\n';
+        }
 
         auto rpath = (elf.type == deploy_t::EXECUTABLE ? "\\$ORIGIN/../lib" : "\\$ORIGIN");
 
 		// Silently patch the rpath and strip things; let's not care if it fails.
         std::stringstream chrpath_cmd;
-        chrpath_cmd << chrpath << " -c -r \"" << rpath << "\" " << new_path;
+        chrpath_cmd << chrpath << " -c -r \"" << rpath << "\" " << deploy_path;
         exec(chrpath_cmd.str().c_str());
 
         std::stringstream strip_cmd;
-        strip_cmd << strip << ' ' << new_path;
+        strip_cmd << strip << ' ' << deploy_path;
         exec(strip_cmd.str().c_str());
     }
 }
