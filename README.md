@@ -9,6 +9,7 @@ Current functionality:
 - [x] Skips blacklisted dependencies (and their dependencies) such as libc.so and libstdc++.so.
 - [x] Deploy binaries and rewrite their `RUNPATH`s\*
 - [ ] i386 (currently it's hardcoded to only deploy x86_64)
+- [ ] Ship `chrpath`
 
 \* Note: `patchelf` seems to be very broken software, so instead I'm using `chrpath`, but this will only patch rpaths _when they already exist in the binary_. Therefore you might still need to add the `yourapp/lib` folder to ld's search paths by running `ldconfig yourapp/lib` or setting `LD_LIBRARY_PATH=yourapp/lib`.
 
