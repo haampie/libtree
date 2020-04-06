@@ -13,15 +13,35 @@ jobs:
     - uses: actions/checkout@v2
       with:
         submodules: recursive
-    - name: build-env
+    - name: Install tools
       run: sudo apt-get update -qq && sudo apt-get install -qq g++-8
-    - name: build
+    - name: Build
       run: |
           mkdir build 
           cd build 
           CXX=g++-8 cmake -DCMAKE_BUILD_TYPE="Release" .. 
           make -j$(nproc)
-    - name: bundle
-      run: ./build/bundler -e ./build/bundler -d bundler
-    - name: test
-      run: tree bundler
+    - name: Bundle
+      run: |
+        ./build/bundler -e ./build/bundler -d bundler
+        tar -zcvf bundler.tar.gz bundler
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+    - name: Upload Release Asset
+      id: upload-release-asset 
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./bundler.tar.gz
+        asset_name: bundler.tar.gz
+        asset_content_type: application/gzip
