@@ -19,7 +19,7 @@ jobs:
       run: |
           mkdir build 
           cd build 
-          CC=g++-8 cmake -DCMAKE_BUILD_TYPE="Release" .. 
+          CXX=g++-8 cmake -DCMAKE_BUILD_TYPE="Release" .. 
           make -j$(nproc)
     - name: bundle
       run: ./build/bundler -e ./build/bundler -d bundler
