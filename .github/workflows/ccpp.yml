@@ -15,7 +15,7 @@ jobs:
       with:
         submodules: recursive
     - name: Install tools
-      run: sudo apt-get update -qq && sudo apt-get install -qq g++-8
+      run: sudo apt-get update -qq && sudo apt-get install -qq g++-8 chrpath binutils
     - name: Build
       run: |
           mkdir build 
@@ -24,7 +24,7 @@ jobs:
           make -j$(nproc)
     - name: Bundle
       run: |
-        ./build/bundler -e ./build/bundler -d bundler
+        ./build/bundler -e ./build/bundler -e $(which chrpath) -e $(which strip) -d bundler
         tar -zcvf bundler_x86_64.tar.gz bundler
     - name: Create Release
       id: create_release

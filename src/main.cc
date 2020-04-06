@@ -333,7 +333,7 @@ private:
 };
 
 // Copy binaries over, change their rpath if they have it, and strip them
-void deploy(std::vector<Elf> const &deps, fs::path const &bin, fs::path const &lib) {
+void deploy(std::vector<Elf> const &deps, fs::path const &bin, fs::path const &lib, fs::path const &strip, fs::path const &chrpath) {
     for (auto const &elf : deps) {
         fs::path new_path = (elf.type == deploy_t::EXECUTABLE ? bin : lib) / elf.name;
         fs::copy_file(elf.abs_path, new_path, fs::copy_options::overwrite_existing);
@@ -343,19 +343,23 @@ void deploy(std::vector<Elf> const &deps, fs::path const &bin, fs::path const &l
         auto rpath = (elf.type == deploy_t::EXECUTABLE ? "\\$ORIGIN/../lib" : "\\$ORIGIN");
 
 		// Silently patch the rpath and strip things; let's not care if it fails.
-        std::stringstream chrpath;
-        chrpath << "chrpath -c -r \"" << rpath << "\" " << new_path;
-        exec(chrpath.str().c_str());
+        std::stringstream chrpath_cmd;
+        chrpath_cmd << chrpath << " -c -r \"" << rpath << "\" " << new_path;
+        exec(chrpath_cmd.str().c_str());
 
-        std::stringstream strip;
-        strip << "strip " << new_path;
-        exec(strip.str().c_str());
+        std::stringstream strip_cmd;
+        strip_cmd << strip << ' ' << new_path;
+        exec(strip_cmd.str().c_str());
     }
 }
 
 int main(int argc, char ** argv) {
-
     cxxopts::Options options("bundler", "Bundle binaries to a small bundle for linux");
+
+    // Use the strip and chrpath that we ship if we can detect them
+    fs::path current_bin{fs::canonical(argv[0]).remove_filename()};
+    auto strip = (fs::exists(current_bin / "strip") ? current_bin / "strip" : "strip");
+    auto chrpath = (fs::exists(current_bin / "chrpath") ? current_bin / "chrpath" : "chrpath");
 
     options.add_options()
       ("d,destination", "Destination", cxxopts::value<std::string>())
@@ -413,6 +417,6 @@ int main(int argc, char ** argv) {
         fs::create_directories(bin_dir);
         fs::create_directories(lib_dir);
 
-        deploy(tree.get_deps(), bin_dir, lib_dir);
+        deploy(tree.get_deps(), bin_dir, lib_dir, strip, chrpath);
     }
 }
