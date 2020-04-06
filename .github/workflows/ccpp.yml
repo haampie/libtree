@@ -25,6 +25,7 @@ jobs:
     - name: Bundle
       run: |
         ./build/bundler -e ./build/bundler -e $(which chrpath) -e $(which strip) -d bundler
+        cp src/bundler bundler/bundler
         tar -zcvf bundler_x86_64.tar.gz bundler
     - name: Create Release
       id: create_release

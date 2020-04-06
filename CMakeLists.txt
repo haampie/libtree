@@ -10,7 +10,7 @@ execute_process(
 add_subdirectory(deps)
 
 add_executable(bundler src/main.cc)
-target_link_libraries(bundler cxxopts termcolor stdc++fs cppglob ELFIO)
+target_link_libraries(bundler cxxopts termcolor cppglob ELFIO)
 target_include_directories(bundler PRIVATE deps/cppglob/include ${CMAKE_CURRENT_BINARY_DIR})
 
 set_property(TARGET bundler PROPERTY CXX_STANDARD 17)

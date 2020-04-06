@@ -92,15 +92,15 @@ fs::path apply_substitutions(fs::path const &rpath, fs::path const &cwd) {
 }
 
 // Turns path1:path2 into [path1, path2]
-std::vector<fs::path> split_paths(std::string const &raw_rpath, fs::path cwd) {
-    std::istringstream buffer(raw_rpath);
+std::vector<fs::path> split_paths(std::string_view raw_path) {
+    std::istringstream buffer(std::string{raw_path});
     std::string path;
 
     std::vector<fs::path> rpaths;
 
     while (std::getline(buffer, path, ':'))
         if (!path.empty())
-            rpaths.push_back(apply_substitutions(path, cwd));
+            rpaths.push_back(path);
 
     return rpaths;
 }
@@ -143,11 +143,11 @@ std::optional<Elf> from_path(deploy_t type, fs::path path_str) {
                 if (tag == DT_NEEDED) {
                     needed.push_back(str);
                 } else if (tag == DT_RUNPATH) {
-                    for (auto const &path : split_paths(str, cwd))
-                        runpaths.push_back(path);
+                    for (auto const &path : split_paths(str))
+                        runpaths.push_back(apply_substitutions(path, cwd));
                 } else if (tag == DT_RPATH) {
-                    for (auto const &path : split_paths(str, cwd))
-                        rpaths.push_back(path);
+                    for (auto const &path : split_paths(str))
+                        rpaths.push_back(apply_substitutions(path, cwd));
                 } else if (tag == DT_SONAME) {
                     name = str;
                 } else if (tag == DT_NULL) {
@@ -357,9 +357,8 @@ int main(int argc, char ** argv) {
     cxxopts::Options options("bundler", "Bundle binaries to a small bundle for linux");
 
     // Use the strip and chrpath that we ship if we can detect them
-    fs::path current_bin{fs::canonical(argv[0]).remove_filename()};
-    auto strip = (fs::exists(current_bin / "strip") ? current_bin / "strip" : "strip");
-    auto chrpath = (fs::exists(current_bin / "chrpath") ? current_bin / "chrpath" : "chrpath");
+    std::string strip = "strip";
+    std::string chrpath = "chrpath";
 
     options.add_options()
       ("d,destination", "Destination", cxxopts::value<std::string>())
@@ -381,7 +380,7 @@ int main(int argc, char ** argv) {
     }
 
     if (result["executable"].count()) {
-        for (auto const &f : result["executable"].as<std::vector<std::string>>()) {
+        for (auto f : result["executable"].as<std::vector<std::string>>()) {
             auto val = from_path(deploy_t::EXECUTABLE, f);
             if (val != std::nullopt)
                 pool.push_back(*val);
@@ -393,7 +392,12 @@ int main(int argc, char ** argv) {
         std::copy(list.begin(), list.end(), std::back_inserter(generatedExcludelist));
     }
 
+    // Fill ld library path from the env variable
     std::vector<fs::path> ld_library_paths;
+    auto env = std::getenv("LD_LIBRARY_PATH");
+    if (env != nullptr)
+        for (auto const &path : split_paths(std::string(env)))
+            ld_library_paths.push_back(path);
 
     // Default search paths is ldconfig + /lib + /usr/lib
     auto search_directories = parse_ld_conf(result["ldconf"].as<std::string>());
