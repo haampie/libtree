@@ -403,11 +403,12 @@ int main(int argc, char ** argv) {
     std::cout << '\n';
 
     // And deploy the binaries if requested.
-    std::cout << termcolor::bold << "Deploying" << termcolor::reset << '\n';
     if (result.count("destination") == 1) {
         fs::path usr_dir = fs::path(result["destination"].as<std::string>()) / "usr";
         fs::path bin_dir = usr_dir / "bin";
         fs::path lib_dir = usr_dir / "lib";
+
+        std::cout << termcolor::bold << "Deploying to " << usr_dir << termcolor::reset << '\n';
 
         fs::create_directories(bin_dir);
         fs::create_directories(lib_dir);
