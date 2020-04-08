@@ -12,6 +12,7 @@ Download the [**latest release**](https://github.com/haampie/bundler/releases) f
 - wget https://github.com/haampie/bundler/releases/download/v0.1.4/bundler_x86_64.tar.gz
 - tar -xzf bundler_x86_64.tar.gz
 - ./bundler/bundler -e $(which man)
+```
 
 ## Example 1: listing the dependencies of an executable
 
