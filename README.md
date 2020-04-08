@@ -5,6 +5,14 @@ A tool that:
 - :point_up: explains why `ldd` finds shared libraries and why not
 - :package: optionally deploys relevant executables and dependencies into a single directory
 
+## Installation
+Download the [**latest release**](https://github.com/haampie/bundler/releases) from Github:
+
+```
+- wget https://github.com/haampie/bundler/releases/download/v0.1.4/bundler_x86_64.tar.gz
+- tar -xzf bundler_x86_64.tar.gz
+- ./bundler/bundler -e $(which man)
+
 ## Example 1: listing the dependencies of an executable
 
 ![example](doc/screenshot.png)
