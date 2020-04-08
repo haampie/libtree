@@ -9,7 +9,7 @@ A tool that:
 Download the [**latest release**](https://github.com/haampie/bundler/releases) from Github:
 
 ```
-- wget https://github.com/haampie/bundler/releases/download/v0.1.4/bundler_x86_64.tar.gz
+- wget https://github.com/haampie/bundler/releases/download/v0.1.5/bundler_x86_64.tar.gz
 - tar -xzf bundler_x86_64.tar.gz
 - ./bundler/bundler -e $(which man)
 ```
