@@ -4,7 +4,7 @@
 #include <termcolor/termcolor.hpp>
 
 // Copy binaries over, change their rpath if they have it, and strip them
-void deploy(std::vector<Elf> const &deps, fs::path const &bin, fs::path const &lib, fs::path const &strip, fs::path const &chrpath) {
+void deploy(std::vector<Elf> const &deps, fs::path const &bin, fs::path const &lib, fs::path const &chrpath_path, fs::path const &strip_path, bool chrpath, bool strip) {
     for (auto const &elf : deps) {
 
         // Go through all symlinks.
@@ -28,12 +28,16 @@ void deploy(std::vector<Elf> const &deps, fs::path const &bin, fs::path const &l
         auto rpath = (elf.type == deploy_t::EXECUTABLE ? "\\$ORIGIN/../lib" : "\\$ORIGIN");
 
 		// Silently patch the rpath and strip things; let's not care if it fails.
-        std::stringstream chrpath_cmd;
-        chrpath_cmd << chrpath << " -c -r \"" << rpath << "\" " << deploy_path;
-        exec(chrpath_cmd.str().c_str());
+        if (chrpath) {
+            std::stringstream chrpath_cmd;
+            chrpath_cmd << chrpath_path << " -c -r \"" << rpath << "\" " << deploy_path;
+            exec(chrpath_cmd.str().c_str());
+        }
 
-        std::stringstream strip_cmd;
-        strip_cmd << strip << ' ' << deploy_path;
-        exec(strip_cmd.str().c_str());
+        if (strip) {
+            std::stringstream strip_cmd;
+            strip_cmd << strip_path << ' ' << deploy_path;
+            exec(strip_cmd.str().c_str());
+        }
     }
 }

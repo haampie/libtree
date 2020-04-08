@@ -11,18 +11,25 @@
 namespace fs = std::filesystem;
 
 int main(int argc, char ** argv) {
-    cxxopts::Options options("bundler", "Bundle binaries to a small bundle for linux");
+    cxxopts::Options options("bundler", "Show the dependency tree of binaries and optionally bundle them into a single folder");
 
     // Use the strip and chrpath that we ship if we can detect them
     std::string strip = "strip";
     std::string chrpath = "chrpath";
 
-    options.add_options()
-      ("d,destination", "Destination", cxxopts::value<std::string>())
-      ("e,executable", "Executable", cxxopts::value<std::vector<std::string>>())
-      ("l,library", "Shared library", cxxopts::value<std::vector<std::string>>())
-      ("r,exclude", "Exclude library", cxxopts::value<std::vector<std::string>>())
-      ("ldconf", "Path to ld.conf", cxxopts::value<std::string>()->default_value("/etc/ld.so.conf"));
+    options.add_options("(A) bundler as ldd replacement")
+      ("e,executable", "Deploy or inspect executable", cxxopts::value<std::vector<std::string>>())
+      ("l,library", "Deploy or inspect shared library", cxxopts::value<std::vector<std::string>>())
+      ("ldconf", "Path to custom ld.conf to test settings", cxxopts::value<std::string>()->default_value("/etc/ld.so.conf"))
+      ("s,skip", "Skip library and its dependencies from being deployed or inspected", cxxopts::value<std::vector<std::string>>());
+
+    options.add_options("(B) bundler as bundler")
+      ("d,destination", "OPTIONAL: When a destination is set to a folder, all binaries and their dependencies are copied over", cxxopts::value<std::string>())
+      ("disable-strip", "Do not call strip on binaries when deploying", cxxopts::value<bool>()->default_value("false"))
+      ("disable-chrpath", "Do not call chrpath on binaries when deploying", cxxopts::value<bool>()->default_value("false"));
+    
+    options.add_options()("h,help", "Print usage");
+
 
     auto result = options.parse(argc, argv);
 
@@ -30,7 +37,7 @@ int main(int argc, char ** argv) {
 
     if (result["executable"].count()) {
         for (auto f : result["executable"].as<std::vector<std::string>>()) {
-            auto val = from_path(deploy_t::EXECUTABLE, f);
+            auto val = from_path(deploy_t::EXECUTABLE, found_t::NONE, f);
             if (val != std::nullopt)
                 pool.push_back(*val);
         }
@@ -38,14 +45,20 @@ int main(int argc, char ** argv) {
 
     if (result["library"].count()) {
         for (auto const &f : result["library"].as<std::vector<std::string>>()) {
-            auto val = from_path(deploy_t::LIBRARY, f);
+            auto val = from_path(deploy_t::LIBRARY, found_t::NONE, f);
             if (val != std::nullopt)
                 pool.push_back(*val);
         }
     }
 
-    if (result["exclude"].count()) {
-        auto const &list = result["exclude"].as<std::vector<std::string>>();
+    if (result.count("help") || pool.size() == 0)
+    {
+      std::cout << options.help() << std::endl;
+      return 0;
+    }
+
+    if (result["skip"].count()) {
+        auto const &list = result["skip"].as<std::vector<std::string>>();
         std::copy(list.begin(), list.end(), std::back_inserter(generatedExcludelist));
     }
 
@@ -63,7 +76,7 @@ int main(int argc, char ** argv) {
 
     // Walk the dependency tree
     std::cout << termcolor::bold << "Dependency tree" << termcolor::reset << '\n';
-    deps tree{std::move(pool), std::move(search_directories), std::move(ld_library_paths)};
+    deps tree{std::move(pool), std::move(search_directories), std::move(ld_library_paths), true};
 
     std::cout << '\n';
 
@@ -78,6 +91,6 @@ int main(int argc, char ** argv) {
         fs::create_directories(bin_dir);
         fs::create_directories(lib_dir);
 
-        deploy(tree.get_deps(), bin_dir, lib_dir, strip, chrpath);
+        deploy(tree.get_deps(), bin_dir, lib_dir, chrpath, strip, !result["disable-chrpath"].as<bool>(), !result["disable-strip"].as<bool>());
     }
 }

@@ -60,7 +60,7 @@ std::vector<fs::path> split_paths(std::string_view raw_path) {
     return rpaths;
 }
 
-std::optional<Elf> from_path(deploy_t type, fs::path path_str) {
+std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path path_str) {
     // Extract some data from the elf file.
     std::vector<fs::path> needed, rpaths, runpaths;
 
@@ -111,5 +111,5 @@ std::optional<Elf> from_path(deploy_t type, fs::path path_str) {
         }
     }
 
-    return Elf{type, name, path_str, runpaths, rpaths, needed};
+    return Elf{type, found_via, name, path_str, runpaths, rpaths, needed};
 }

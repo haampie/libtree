@@ -1,18 +1,45 @@
 # bundler
 
-A tool to bundle your binaries, useful for building small Docker containers or AppImages.
+A tool that:
+- :deciduous_tree: turns `ldd` into a fancy tree
+- :point_up: explains why `ldd` finds shared libraries and why not
+- :package: optionally deploys relevant executables and dependencies into a single directory
 
-Current functionality:
-- [x] Add executables with `-e` and libraries via `-l`
-- [x] Walks the dependency tree like `ld.so` (handles `RPATH`, `RUNPATH` and `LD_LIBRARY_PATH` correctly).
-- [x] Uses `/etc/ld.so.conf` or any custom conf file via `-ldconf /path/to/ld.so.conf`
-- [x] Skips blacklisted dependencies (and their dependencies) such as libc.so and libstdc++.so.
-- [x] Deploy binaries and rewrite their `RUNPATH`s\*
-- [ ] i386 (currently it's hardcoded to only deploy x86_64)
-- [ ] Ship `chrpath`
+## Example 1: listing the dependencies of an executable
 
-\* Note: `patchelf` seems to be very broken software, so instead I'm using `chrpath`, but this will only patch rpaths _when they already exist in the binary_. Therefore you might still need to add the `yourapp/lib` folder to ld's search paths by running `ldconfig yourapp/lib` or setting `LD_LIBRARY_PATH=yourapp/lib`.
+![example](doc/screenshot.png)
 
+## Example 2: deploying binaries + dependencies into a folder:
+```bash
+$ bundler -e $(which bundler) -d bundler.bundle
+Dependency tree
+bundler
+├── libcppglob.so.1 [direct]
+│   ├── libstdc++.so.6 (skipped) [ld.so.conf]
+│   ├── libgcc_s.so.1 (skipped) [ld.so.conf]
+│   └── libc.so.6 (skipped) [ld.so.conf]
+├── libstdc++.so.6 (skipped) [ld.so.conf]
+├── libgcc_s.so.1 (skipped) [ld.so.conf]
+└── libc.so.6 (skipped) [ld.so.conf]
+
+Deploying to "bundler.bundle/usr"
+"/home/.../Documents/projects/bundler/build/bundler" => "bundler.bundle/usr/bin/bundler"
+"/home/.../Documents/projects/bundler/build/lib/libcppglob.so.1.1.0" => "bundler.bundle/usr/lib/libcppglob.so.1.1.0"
+  creating symlink "bundler.bundle/usr/lib/libcppglob.so.1"
+
+$ tree bundler.bundle/
+bundler.bundle/
+└── usr
+    ├── bin
+    │   └── bundler
+    └── lib
+        ├── libcppglob.so.1 -> libcppglob.so.1.1.0
+        └── libcppglob.so.1.1.0
+
+3 directories, 3 files
+```
+
+## Build from source 
 ```bash
 git clone --recursive https://github.com/haampie/bundler.git
 cd bundler
@@ -22,29 +49,13 @@ cmake -DCMAKE_BUILD_TYPE=Release ..
 make
 ```
 
-```bash
-$ ./bundler -e bundler -d Bundler.app
-Dependency tree
-bundler
-|--libcppglob.so.1
-|  |--libstdc++.so.6 (excluded)
-|  |--libgcc_s.so.1 (excluded)
-|  |--libc.so.6 (excluded)
-|--libstdc++.so.6 (excluded)
-|--libgcc_s.so.1 (excluded)
-|--libc.so.6 (excluded)
+## Current functionality
+- [x] Add executables with `-e` and libraries via `-l`
+- [x] Walks the dependency tree like `ld.so` (handles `RPATH`, `RUNPATH` and `LD_LIBRARY_PATH` correctly).
+- [x] Uses `/etc/ld.so.conf` or any custom conf file via `-ldconf /path/to/ld.so.conf`
+- [x] Skips blacklisted dependencies (and their dependencies) such as libc.so and libstdc++.so.
+- [x] Deploy binaries and rewrite their `RUNPATH`s\*
+- [x] Ship `chrpath` and `strip`
+- [ ] i386 (currently it's hardcoded to only deploy x86_64)
 
-Deploying to "Bundler.app/usr"
-"/home/harmen/Documents/projects/binary_bundler/build/bundler" => "Bundler.app/usr/bin/bundler"
-"/home/harmen/Documents/projects/binary_bundler/build/lib/libcppglob.so.1.1.0" => "Bundler.app/usr/lib/libcppglob.so.1"
-
-$ tree Bundler
-Bundler.app/
-└── usr
-    ├── bin
-    │   └── bundler
-    └── lib
-        └── libcppglob.so.1
-
-3 directories, 2 files
-```
+\* Note: `patchelf` seems to be very broken software, so instead I'm using `chrpath`. The downside is `chrpath` will only patch rpaths _when they already exist in the binary_. Therefore you might still need to add the `yourapp/lib` folder to ld's search paths by running `echo /path/to/yourapp.bundle/lib > /etc/ld.so.conf/my_app.conf && ldconfig` or by setting `LD_LIBRARY_PATH=/path/to/yourapp.bundle/lib`.
