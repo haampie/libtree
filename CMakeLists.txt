@@ -9,8 +9,17 @@ execute_process(
 
 add_subdirectory(deps)
 
-add_executable(bundler src/main.cc)
+set(SOURCE
+   ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
+   ${CMAKE_CURRENT_SOURCE_DIR}/src/deploy.cpp
+   ${CMAKE_CURRENT_SOURCE_DIR}/src/deps.cpp
+   ${CMAKE_CURRENT_SOURCE_DIR}/src/elf.cpp
+   ${CMAKE_CURRENT_SOURCE_DIR}/src/exec.cpp
+   ${CMAKE_CURRENT_SOURCE_DIR}/src/ld.cpp
+)
+
+add_executable(bundler ${SOURCE})
 target_link_libraries(bundler cxxopts termcolor cppglob ELFIO)
-target_include_directories(bundler PRIVATE deps/cppglob/include ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(bundler PRIVATE include deps/cppglob/include ${CMAKE_CURRENT_BINARY_DIR})
 
 set_property(TARGET bundler PROPERTY CXX_STANDARD 17)
