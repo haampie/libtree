@@ -68,7 +68,7 @@ void deps::explore(Elf const &elf, std::vector<fs::path> &rpaths, std::vector<bo
         case found_t::DIRECT:          std::cout << " [direct]"; break;
         case found_t::RPATH:           std::cout << " [rpath]"; break;
         case found_t::LD_LIBRARY_PATH: std::cout << " [LD_LIBRARY_PATH]"; break;
-        case found_t::RUNPATH:         std::cout << " [direct]"; break;
+        case found_t::RUNPATH:         std::cout << " [runpath]"; break;
         case found_t::LD_SO_CONF:      std::cout << " [ld.so.conf]"; break;
         case found_t::DEFAULT_PATHS:   std::cout << " [default paths]"; break;
     }
