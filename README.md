@@ -23,7 +23,7 @@ Download the [**latest release**](https://github.com/haampie/bundler/releases) f
 $ bundler -e $(which bundler) -d bundler.bundle
 Dependency tree
 bundler
-├── libcppglob.so.1 [direct]
+├── libcppglob.so.1 [runpath]
 │   ├── libstdc++.so.6 (skipped) [ld.so.conf]
 │   ├── libgcc_s.so.1 (skipped) [ld.so.conf]
 │   └── libc.so.6 (skipped) [ld.so.conf]
