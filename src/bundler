@@ -5,4 +5,4 @@ DIR=$(dirname $(readlink -f $0))
 export LD_LIBRARY_PATH="$DIR/usr/lib:$LD_LIBRARY_PATH"
 export PATH="$DIR/usr/bin:$PATH"
 
-$DIR/usr/bin/bundler $@
+$DIR/usr/bin/libtree $@

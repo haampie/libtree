@@ -3,27 +3,27 @@
 #include <cxxopts/cxxopts.hpp>
 #include <termcolor/termcolor.hpp>
 
-#include <bundler/elf.hpp>
-#include <bundler/ld.hpp>
-#include <bundler/deploy.hpp>
-#include <bundler/deps.hpp>
+#include <libtree/elf.hpp>
+#include <libtree/ld.hpp>
+#include <libtree/deploy.hpp>
+#include <libtree/deps.hpp>
 
 namespace fs = std::filesystem;
 
 int main(int argc, char ** argv) {
-    cxxopts::Options options("bundler", "Show the dependency tree of binaries and optionally bundle them into a single folder");
+    cxxopts::Options options("libtree", "Show the dependency tree of binaries and optionally bundle them into a single folder");
 
     // Use the strip and chrpath that we ship if we can detect them
     std::string strip = "strip";
     std::string chrpath = "chrpath";
 
-    options.add_options("(A) bundler as ldd replacement")
+    options.add_options("(A) libtree as ldd replacement")
       ("e,executable", "Deploy or inspect executable", cxxopts::value<std::vector<std::string>>())
       ("l,library", "Deploy or inspect shared library", cxxopts::value<std::vector<std::string>>())
       ("ldconf", "Path to custom ld.conf to test settings", cxxopts::value<std::string>()->default_value("/etc/ld.so.conf"))
       ("s,skip", "Skip library and its dependencies from being deployed or inspected", cxxopts::value<std::vector<std::string>>());
 
-    options.add_options("(B) bundler as bundler")
+    options.add_options("(B) libtree as bundler")
       ("d,destination", "OPTIONAL: When a destination is set to a folder, all binaries and their dependencies are copied over", cxxopts::value<std::string>())
       ("disable-strip", "Do not call strip on binaries when deploying", cxxopts::value<bool>()->default_value("false"))
       ("disable-chrpath", "Do not call chrpath on binaries when deploying", cxxopts::value<bool>()->default_value("false"));

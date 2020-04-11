@@ -1,4 +1,4 @@
-#include <bundler/deps.hpp>
+#include <libtree/deps.hpp>
 
 #include <elfio/elfio.hpp>
 #include <elfio/elfio_dump.hpp>
