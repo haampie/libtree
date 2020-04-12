@@ -24,7 +24,7 @@ jobs:
           make -j$(nproc)
     - name: Bundle
       run: |
-        ./build/libtree -e ./build/libtree -e $(which chrpath) -e $(which strip) -d libtree
+        ./build/libtree ./build/libtree $(which chrpath) $(which strip) -d libtree --chrpath --strip
         cp src/libtree libtree/libtree
         tar -zcvf libtree_x86_64.tar.gz libtree
     - name: Create Release
