@@ -6,23 +6,25 @@
 // Copy binaries over, change their rpath if they have it, and strip them
 void deploy(std::vector<Elf> const &deps, fs::path const &bin, fs::path const &lib, fs::path const &chrpath_path, fs::path const &strip_path, bool chrpath, bool strip) {
     for (auto const &elf : deps) {
-
         // Go through all symlinks.
         auto canonical = fs::canonical(elf.abs_path);
 
-        //Copy to the deploy folder
+        // Copy to the deploy folder
         auto deploy_folder = (elf.type == deploy_t::EXECUTABLE ? bin : lib);
         auto deploy_path = deploy_folder / canonical.filename();
         fs::copy_file(canonical, deploy_path, fs::copy_options::overwrite_existing);
 
         std::cout << termcolor::green << canonical << termcolor::reset << " => " << termcolor::green << deploy_path << termcolor::reset << '\n';
+        
         // Create all symlinks
-        for (auto link = elf.abs_path; fs::is_symlink(link); link = fs::read_symlink(link)) {
-            auto link_destination = deploy_folder / link.filename();
-            fs::remove(link_destination);
-            fs::create_symlink(deploy_path.filename(), link_destination);
+        if (elf.type == deploy_t::LIBRARY) {
+            for (auto link = elf.abs_path; fs::is_symlink(link); link = fs::read_symlink(link)) {
+                auto link_destination = deploy_folder / link.filename();
+                fs::remove(link_destination);
+                fs::create_symlink(deploy_path.filename(), link_destination);
 
-            std::cout << "  " << termcolor::yellow << "creating symlink " << link_destination << termcolor::reset << '\n';
+                std::cout << "  " << termcolor::yellow << "creating symlink " << link_destination << termcolor::reset << '\n';
+            }
         }
 
         auto rpath = (elf.type == deploy_t::EXECUTABLE ? "\\$ORIGIN/../lib" : "\\$ORIGIN");
