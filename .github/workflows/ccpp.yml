@@ -20,7 +20,7 @@ jobs:
       run: |
           mkdir build 
           cd build 
-          CXX=g++-8 cmake -DCMAKE_BUILD_TYPE="Release" .. 
+          CXX=g++-8 cmake -DCMAKE_BUILD_TYPE="Release" -DCMAKE_CXX_FLAGS="-Wall -Wextra" -DCMAKE_CXX_FLAGS_RELEASE="-O2" .. 
           make -j$(nproc)
     - name: Bundle
       run: |

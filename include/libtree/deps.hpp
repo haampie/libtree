@@ -10,13 +10,18 @@
 class deps {
 
 public:
-    deps(std::vector<Elf> &&input, std::vector<fs::path> &&ld_so_conf, std::vector<fs::path> && ld_library_paths, bool verbose);
+    enum class verbosity_t {NONE, VERBOSE, VERY_VERBOSE};
+
+    deps(std::vector<Elf> &&input, std::vector<fs::path> &&ld_so_conf, std::vector<fs::path> && ld_library_paths, verbosity_t verbose);
 
     std::vector<Elf> const &get_deps() const;
 
 private:
     void explore(Elf const &elf, std::vector<fs::path> &rpaths, std::vector<bool> &done);
     void explore(Elf const &elf, std::vector<fs::path> &rpaths);
+
+    std::string get_indent(std::vector<bool> const &done) const;
+    std::string get_error_indent(std::vector<bool> const &done) const;
 
     std::optional<Elf> locate(Elf const &parent, fs::path const &so, std::vector<fs::path> const &rpaths, std::vector<fs::path> const &runpaths);
     std::optional<Elf> locate_directly(Elf const &parent, fs::path const &so);
@@ -32,5 +37,5 @@ private:
 
     std::vector<Elf> m_all_binaries;
 
-    bool m_verbose;
+    verbosity_t m_verbosity;
 };

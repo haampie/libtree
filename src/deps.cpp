@@ -13,11 +13,11 @@ std::string repeat(std::string_view input, size_t num)
     return os.str();
 }
 
-deps::deps(std::vector<Elf> &&input, std::vector<fs::path> &&ld_so_conf, std::vector<fs::path> && ld_library_paths, bool verbose) 
+deps::deps(std::vector<Elf> &&input, std::vector<fs::path> &&ld_so_conf, std::vector<fs::path> && ld_library_paths, deps::verbosity_t verbose) 
     : m_top_level(std::move(input)), 
-      m_ld_so_conf(std::move(ld_so_conf)), 
       m_ld_library_paths(std::move(ld_library_paths)),
-      m_verbose(verbose)
+      m_ld_so_conf(std::move(ld_so_conf)),
+      m_verbosity(verbose)
 {
     std::vector<fs::path> rpaths;
     for (auto const &elf : m_top_level)
@@ -33,28 +33,38 @@ void deps::explore(Elf const &elf, std::vector<fs::path> &rpaths) {
     explore(elf, rpaths, done);
 }
 
-void deps::explore(Elf const &elf, std::vector<fs::path> &rpaths, std::vector<bool> &done) {
+std::string deps::get_indent(std::vector<bool> const &done) const {
     std::string indent;
-    for (size_t idx = 0; idx < done.size(); ++idx) {
-        if (done[idx]) {
-            if (idx + 1 == done.size())
-                indent += "└── ";
-            else
-                indent += "    ";
-        } else {
-            if (idx + 1 == done.size())
-                indent += "├── ";
-            else
-                indent += "│   ";
-        }
-    }
 
+    for (size_t idx = 0; idx + 1 < done.size(); ++idx)
+        indent += done[idx] ? "    " : "│   ";
+    
+    if (done.size() != 0)
+        indent += done.back() ? "└── " : "├── ";
+
+    return indent;
+}
+
+std::string deps::get_error_indent(std::vector<bool> const &done) const {
+    std::string indent;
+
+    for (size_t idx = 0; idx + 1 < done.size(); ++idx)
+        indent += done[idx] ? "    " : "│   ";
+    
+    if (done.size() != 0)
+        indent += "    ";
+
+    return indent;
+}
+
+void deps::explore(Elf const &elf, std::vector<fs::path> &rpaths, std::vector<bool> &done) {
+
+    auto indent = get_indent(done);
     auto cached = m_visited.count(elf.name) > 0;
     auto search = std::find(generatedExcludelist.begin(), generatedExcludelist.end(), elf.name);
     auto excluded = search != generatedExcludelist.end();
 
-
-    std::cout << indent << (excluded ? termcolor::magenta : cached ? termcolor::blue : termcolor::yellow);
+    std::cout << indent << (excluded ? termcolor::magenta : cached ? termcolor::blue : termcolor::cyan);
     if (!excluded && !cached)
         std::cout << termcolor::bold;
 
@@ -62,7 +72,7 @@ void deps::explore(Elf const &elf, std::vector<fs::path> &rpaths, std::vector<bo
               << (excluded ? " (skipped)" : cached ? " (visited)" : "") 
               << termcolor::reset;
 
-    std::cout << termcolor::magenta;
+    std::cout << (excluded ? termcolor::magenta : cached ? termcolor::blue : termcolor::yellow);
     switch(elf.found_via) {
         case found_t::NONE: break;
         case found_t::DIRECT:          std::cout << " [direct]"; break;
@@ -76,7 +86,7 @@ void deps::explore(Elf const &elf, std::vector<fs::path> &rpaths, std::vector<bo
     std::cout << termcolor::reset << '\n';
 
     // Early return if already visited?
-    if (cached || excluded) return;
+    if (m_verbosity != verbosity_t::VERY_VERBOSE && (cached || excluded)) return;
 
     // Cache
     m_visited.insert(elf.name);
@@ -89,30 +99,51 @@ void deps::explore(Elf const &elf, std::vector<fs::path> &rpaths, std::vector<bo
     // Recurse deeper
     done.push_back(false);
 
-    for (size_t idx = 0; idx < elf.needed.size(); ++idx) {
+    std::vector<std::optional<Elf>> children;
+
+    for (auto const &lib : elf.needed) {
+        auto result = locate(elf, lib, total_rpaths, elf.runpaths);
+
+        if (m_verbosity == verbosity_t::NONE && result && std::find(generatedExcludelist.begin(), generatedExcludelist.end(), result->name) != generatedExcludelist.end())
+            continue;
+
+        children.push_back(result);
+    }
+
+    for (size_t idx = 0; idx < children.size(); ++idx) {
 
         // Set to true if this is the last child we're visiting.
-        if (idx + 1 == elf.needed.size())
+        if (idx + 1 == children.size())
             done[done.size() - 1] = true;
 
-        auto result = locate(elf, elf.needed[idx], total_rpaths, elf.runpaths);
+        auto result = children[idx];
 
         if (result)
             explore(*result, total_rpaths, done);
         else {
-            std::string whitespaces(indent.size(), ' ');
-            std::cout << indent << termcolor::red << termcolor::bold << "ERROR could not find " << elf.name << ". \n" << termcolor::reset
-                      << whitespaces << termcolor::blue << "RPATH: " << termcolor::reset;
-            std::copy(total_rpaths.begin(), total_rpaths.end(), std::ostream_iterator<fs::path>(std::cout, ":"));
-            std::cout << '\n'
-                      << whitespaces << termcolor::blue << "RUNPATH: " << termcolor::reset;
-            std::copy(elf.runpaths.begin(), elf.runpaths.end(), std::ostream_iterator<fs::path>(std::cout, ":"));
-            std::cout << '\n'
-                      << whitespaces << termcolor::blue << "LD_LIBRARY_PATH: " << termcolor::reset;
-            std::copy(m_ld_library_paths.begin(), m_ld_library_paths.end(), std::ostream_iterator<fs::path>(std::cout, ":"));
-            std::cout << '\n'
-                      << whitespaces << termcolor::blue << "/etc/ld.so.conf: " << termcolor::reset;
-            std::copy(m_ld_so_conf.begin(), m_ld_so_conf.end(), std::ostream_iterator<fs::path>(std::cout, ":"));
+            auto indent = get_indent(done);
+            std::string whitespaces = get_error_indent(done);
+            std::cout << indent << termcolor::bold << termcolor::red << elf.name << " not found: " << termcolor::reset
+                      << termcolor::blue << "RPATH " << termcolor::reset;
+            if (total_rpaths.empty())
+                std::cout << "(empty)";
+            else
+                std::copy(total_rpaths.begin(), total_rpaths.end(), std::ostream_iterator<fs::path>(std::cout, ":"));
+            std::cout << ' ' << termcolor::blue << "LD_LIBRARY_PATH " << termcolor::reset;
+            if (m_ld_library_paths.empty())
+                std::cout << "(empty)";
+            else
+                std::copy(m_ld_library_paths.begin(), m_ld_library_paths.end(), std::ostream_iterator<fs::path>(std::cout, ":"));
+            std::cout << ' ' << termcolor::blue << "RUNPATH " << termcolor::reset;
+            if (elf.runpaths.empty())
+                std::cout << "(empty)";
+            else
+                std::copy(elf.runpaths.begin(), elf.runpaths.end(), std::ostream_iterator<fs::path>(std::cout, ":"));
+            std::cout << ' ' << termcolor::blue << "/etc/ld.so.conf " << termcolor::reset;
+            if (m_ld_so_conf.empty())
+                std::cout << "(empty)";
+            else
+                std::copy(m_ld_so_conf.begin(), m_ld_so_conf.end(), std::ostream_iterator<fs::path>(std::cout, ":"));
             std::cout << '\n';
         }
     }
