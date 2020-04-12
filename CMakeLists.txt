@@ -1,6 +1,8 @@
 cmake_minimum_required (VERSION 3.0)
 project (libtree)
 
+include(GNUInstallDirs)
+
 set(CACHE BOOL USE_SYSTEM_DEPS OFF)
 
 message(STATUS "Generating excludelist")
@@ -38,3 +40,7 @@ else()
 endif()
 
 set_property(TARGET libtree PROPERTY CXX_STANDARD 17)
+
+install(TARGETS libtree
+    DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
