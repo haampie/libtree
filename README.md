@@ -11,7 +11,8 @@ Download the [**latest release**](https://github.com/haampie/libtree/releases) f
 ```bash
 $ wget https://github.com/haampie/libtree/releases/download/v1.0.0/libtree_x86_64.tar.gz
 $ tar -xzf libtree_x86_64.tar.gz
-$ ./libtree/libtree $(which man)
+$ ln -s $(realpath ./libtree/libtree) /usr/local/bin/
+$ libtree $(which man)
 ```
 
 ## Example 1: listing the dependencies of an executable
