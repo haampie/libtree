@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 3.0)
-project (bundler)
+project (libtree)
 
 message(STATUS "Generating excludelist")
 execute_process(
@@ -18,8 +18,8 @@ set(SOURCE
    ${CMAKE_CURRENT_SOURCE_DIR}/src/ld.cpp
 )
 
-add_executable(bundler ${SOURCE})
-target_link_libraries(bundler cxxopts termcolor cppglob ELFIO)
-target_include_directories(bundler PRIVATE include deps/cppglob/include ${CMAKE_CURRENT_BINARY_DIR})
+add_executable(libtree ${SOURCE})
+target_link_libraries(libtree cxxopts termcolor cppglob ELFIO)
+target_include_directories(libtree PRIVATE include deps/cppglob/include ${CMAKE_CURRENT_BINARY_DIR})
 
-set_property(TARGET bundler PROPERTY CXX_STANDARD 17)
+set_property(TARGET libtree PROPERTY CXX_STANDARD 17)

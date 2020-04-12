@@ -20,13 +20,13 @@ jobs:
       run: |
           mkdir build 
           cd build 
-          CXX=g++-8 cmake -DCMAKE_BUILD_TYPE="Release" .. 
+          CXX=g++-8 cmake -DCMAKE_BUILD_TYPE="Release" -DCMAKE_CXX_FLAGS="-Wall -Wextra" -DCMAKE_CXX_FLAGS_RELEASE="-O2" .. 
           make -j$(nproc)
     - name: Bundle
       run: |
-        ./build/bundler -e ./build/bundler -e $(which chrpath) -e $(which strip) -d bundler
-        cp src/bundler bundler/bundler
-        tar -zcvf bundler_x86_64.tar.gz bundler
+        ./build/libtree -e ./build/libtree -e $(which chrpath) -e $(which strip) -d libtree
+        cp src/libtree libtree/libtree
+        tar -zcvf libtree_x86_64.tar.gz libtree
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
@@ -44,6 +44,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./bundler_x86_64.tar.gz
-        asset_name: bundler_x86_64.tar.gz
+        asset_path: ./libtree_x86_64.tar.gz
+        asset_name: libtree_x86_64.tar.gz
         asset_content_type: application/gzip

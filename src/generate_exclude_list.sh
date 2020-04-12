@@ -48,9 +48,9 @@ cat > "$tempfile" <<\EOF
  */
 
 #include <string>
-#include <vector>
+#include <unordered_set>
 
-static std::vector<std::string> generatedExcludelist = {
+static std::unordered_set<std::string> generatedExcludelist = {
 EOF
 
 # create array
