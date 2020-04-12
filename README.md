@@ -19,7 +19,7 @@ libtree $(which man)
 
 ![example](doc/screenshot.png)
 
-## Example 2: deploying binaries + dependencies into a folder:
+## Example 2: deploying binaries + dependencies into a folder
 ```bash
 $ libtree $(which libtree) -d libtree.bundle --chrpath --strip
 libtree
