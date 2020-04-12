@@ -1,6 +1,6 @@
 #include "excludelist.h"
 
-#include <cxxopts/cxxopts.hpp>
+#include <cxxopts.hpp>
 #include <termcolor/termcolor.hpp>
 
 #include <libtree/elf.hpp>
