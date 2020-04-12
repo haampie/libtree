@@ -48,10 +48,9 @@ By default certain standard depenendencies are not shown. For more verbose outpu
 
 ## Changing search paths
 `libtree` follows the rules of `ld.so` to locate libraries, but does not use `ldconfig`'s
-cache. Instead it parses `/etc/ld.so.conf` runtime. The location of the `ld.so` config
-can be changed as well by setting `--ldconf mylibs.conf`.
-
-Search paths can be added at runtime as well via `LD_LIBRARY_PATH=path libtree ...`.
+cache. Instead it parses `/etc/ld.so.conf` at runtime. In fact you can change the search
+path config by setting `--ldconf mylibs.conf`. Search paths can be added as well via 
+`LD_LIBRARY_PATH="path1:path2:$LD_LIBRARY_PATH" libtree ...`.
 
 ## Build from source 
 ```bash
