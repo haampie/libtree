@@ -22,7 +22,7 @@ void deploy(std::vector<Elf> const &deps, fs::path const &bin, fs::path const &l
             fs::remove(link_destination);
             fs::create_symlink(deploy_path.filename(), link_destination);
 
-            std::cout << "  " << termcolor::yellow << "creating symlink " << link_destination << '\n';
+            std::cout << "  " << termcolor::yellow << "creating symlink " << link_destination << termcolor::reset << '\n';
         }
 
         auto rpath = (elf.type == deploy_t::EXECUTABLE ? "\\$ORIGIN/../lib" : "\\$ORIGIN");

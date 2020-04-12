@@ -58,15 +58,15 @@ int main(int argc, char ** argv) {
         }
     }
 
-    if (result.count("help") || pool.size() == 0)
-    {
+    if (result.count("help") || pool.size() == 0) {
       std::cout << options.help() << std::endl;
       return 0;
     }
 
     if (result["skip"].count()) {
         auto const &list = result["skip"].as<std::vector<std::string>>();
-        std::copy(list.begin(), list.end(), std::back_inserter(generatedExcludelist));
+        for (auto const &lib : list)
+            generatedExcludelist.insert(lib);
     }
 
     // Fill ld library path from the env variable
@@ -84,7 +84,7 @@ int main(int argc, char ** argv) {
                                                       : result.count("v") ? deps::verbosity_t::VERBOSE
                                                                          : deps::verbosity_t::NONE;
 
-    deps tree{std::move(pool), std::move(ld_conf), std::move(ld_library_paths), verbosity};
+    deps tree{std::move(pool), std::move(ld_conf), std::move(ld_library_paths), std::move(generatedExcludelist), verbosity};
 
     std::cout << '\n';
 
@@ -99,6 +99,6 @@ int main(int argc, char ** argv) {
         fs::create_directories(bin_dir);
         fs::create_directories(lib_dir);
 
-        deploy(tree.get_deps(), bin_dir, lib_dir, chrpath, strip, !result["disable-chrpath"].as<bool>(), !result["disable-strip"].as<bool>());
+        deploy(tree.get_deps(), bin_dir, lib_dir, chrpath, strip, result["chrpath"].as<bool>(), result["strip"].as<bool>());
     }
 }
