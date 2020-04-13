@@ -46,7 +46,7 @@ jobs:
     - uses: actions/checkout@v2
       with:
         submodules: recursive
-      path: sources/libtree
+        path: sources/libtree
 
     - name: Create source tarball
       run: |
