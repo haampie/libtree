@@ -3,7 +3,7 @@ project (libtree)
 
 include(GNUInstallDirs)
 
-set(CACHE BOOL USE_SYSTEM_DEPS OFF)
+option(USE_SYSTEM_DEPS "Use system cppglob, cxxopts, termcolor and elfio" OFF)
 
 message(STATUS "Generating excludelist")
 execute_process(
