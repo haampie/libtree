@@ -49,6 +49,5 @@ endif()
 
 set_property(TARGET libtree PROPERTY CXX_STANDARD 17)
 
-install(TARGETS libtree
-    DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
+install(TARGETS libtree DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES doc/libtree.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
