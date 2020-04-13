@@ -7,6 +7,8 @@
 #include <libtree/deploy.hpp>
 #include <libtree/deps.hpp>
 
+#include "libtree_version.hpp"
+
 namespace fs = std::filesystem;
 
 bool is_lib(fs::path const &p) {
@@ -40,11 +42,18 @@ int main(int argc, char ** argv) {
       ("strip", "Call strip on binaries when deploying", cxxopts::value<bool>()->default_value("false"))
       ("chrpath", "Call chrpath on binaries when deploying", cxxopts::value<bool>()->default_value("false"));
     
-    options.add_options()("h,help", "Print usage");
+    options.add_options()
+        ("h,help", "Print usage")
+        ("version", "Print version info");
 
     options.parse_positional("binary");
 
     auto result = options.parse(argc, argv);
+
+    if (result.count("version") != 0) {
+        std::cout << s_libtree_version << '\n';
+        return 0;
+    }
 
     std::vector<Elf> pool;
 

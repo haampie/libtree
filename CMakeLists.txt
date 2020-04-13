@@ -1,7 +1,9 @@
 cmake_minimum_required (VERSION 3.0)
-project (libtree)
+project (libtree VERSION 1.0.2)
 
 include(GNUInstallDirs)
+
+configure_file(libtree_version.hpp.in libtree_version.hpp)
 
 option(USE_SYSTEM_DEPS "Use system cppglob, cxxopts, termcolor and elfio" OFF)
 
@@ -22,7 +24,7 @@ set(SOURCE
 )
 
 add_executable(libtree ${SOURCE})
-target_include_directories(libtree PRIVATE include)
+target_include_directories(libtree PRIVATE include ${PROJECT_BINARY_DIR})
 
 if(USE_SYSTEM_DEPS)
     target_link_libraries(libtree cppglob)
