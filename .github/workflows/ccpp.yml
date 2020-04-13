@@ -51,7 +51,8 @@ jobs:
     - name: Create source tarball
       run: |
         rm -rf sources/libtree/.git
-        tar -zcvf sources.tar.gz sources/libtree
+        rm -rf sources/libtree/deps/ELFIO/{elf_examples,examples,doc}
+        tar -C sources -zcvf sources.tar.gz libtree
 
     - name: Upload sources
       uses: actions/upload-release-asset@v1
