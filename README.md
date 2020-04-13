@@ -9,7 +9,7 @@ A tool that:
 Download the [**latest release**](https://github.com/haampie/libtree/releases) from Github:
 
 ```bash
-wget https://github.com/haampie/libtree/releases/download/v1.0.0/libtree_x86_64.tar.gz
+wget https://github.com/haampie/libtree/releases/download/v1.0.1/libtree_x86_64.tar.gz
 tar -xzf libtree_x86_64.tar.gz
 ln -s $(realpath ./libtree/libtree) /usr/local/bin/
 libtree $(which man)
@@ -61,6 +61,7 @@ mkdir build
 cd build
 cmake -DCMAKE_BUILD_TYPE=Release ..
 make
+make install
 ```
 
 ## Known issues
