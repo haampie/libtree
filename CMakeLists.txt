@@ -5,16 +5,9 @@ include(GNUInstallDirs)
 
 option(USE_SYSTEM_DEPS "Use system cppglob, cxxopts, termcolor and elfio" OFF)
 
-message(STATUS "Generating excludelist")
-execute_process(
-    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/src/generate_exclude_list.sh
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-)
-
 if(NOT USE_SYSTEM_DEPS)
     add_subdirectory(deps)
 endif()
-
 
 set(SOURCE
    ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
