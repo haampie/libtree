@@ -37,7 +37,7 @@ else()
     target_link_libraries(libtree cxxopts termcolor cppglob ELFIO)
     target_include_directories(libtree PRIVATE
         deps/cppglob/include
-        deps/termcolors/termcolors
+        deps/termcolors/include
         deps/cxxopts/include/cxxopts
         deps/ELFIO
     )
