@@ -2,3 +2,4 @@ main
 *.swp
 build/
 Dockerfile
+compile_commands.json

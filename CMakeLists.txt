@@ -11,7 +11,7 @@ execute_process(
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-if(NOT ${USE_SYSTEM_DEPS})
+if(NOT USE_SYSTEM_DEPS)
     add_subdirectory(deps)
 endif()
 
@@ -28,15 +28,19 @@ set(SOURCE
 add_executable(libtree ${SOURCE})
 target_include_directories(libtree PRIVATE
     include
-    deps/cppglob/include
-    deps/cxxopts/include
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-if(${USE_SYSTEM_DEPS})
-   target_link_libraries(libtree cppglob)
+if(USE_SYSTEM_DEPS)
+    target_link_libraries(libtree cppglob)
 else()
-   target_link_libraries(libtree cxxopts termcolor cppglob ELFIO)
+    target_link_libraries(libtree cxxopts termcolor cppglob ELFIO)
+    target_include_directories(libtree PRIVATE
+        deps/cppglob/include
+        deps/termcolors/termcolors
+        deps/cxxopts/include/cxxopts
+        deps/ELFIO
+    )
 endif()
 
 set_property(TARGET libtree PROPERTY CXX_STANDARD 17)
