@@ -22,7 +22,7 @@ bool is_lib(fs::path const &p) {
 }
 
 int main(int argc, char ** argv) {
-    cxxopts::Options options("libtree", "Show the dependency tree of binaries and optionally bundle them into a single folder");
+    cxxopts::Options options("libtree", "Show the dependency tree of binaries and optionally bundle them into a single folder.");
 
     // Use the strip and chrpath that we ship if we can detect them
     std::string strip = "strip";
@@ -30,14 +30,15 @@ int main(int argc, char ** argv) {
 
     options.positional_help("binary [more binaries...]");
 
-    options.add_options("A: Locating libs")
+    options.add_options("A. Locating libs")
+      ("p,path", "Show the path of libraries instead of their SONAME", cxxopts::value<bool>()->default_value("false"))
       ("v,verbose", "Show the skipped libraries without their children", cxxopts::value<bool>()->default_value("false"))
       ("a,all", "Show the skipped libraries and their children", cxxopts::value<bool>()->default_value("false"))
       ("l,ldconf", "Path to custom ld.conf to test settings", cxxopts::value<std::string>()->default_value("/etc/ld.so.conf"))
       ("s,skip", "Skip library and its dependencies from being deployed or inspected", cxxopts::value<std::vector<std::string>>())
       ("b,binary", "Binary to inspect", cxxopts::value<std::vector<std::string>>());
 
-    options.add_options("B: Copying libs")
+    options.add_options("B. Copying libs")
       ("d,destination", "OPTIONAL: When a destination is set to a folder, all binaries and their dependencies are copied over", cxxopts::value<std::string>())
       ("strip", "Call strip on binaries when deploying", cxxopts::value<bool>()->default_value("false"))
       ("chrpath", "Call chrpath on binaries when deploying", cxxopts::value<bool>()->default_value("false"));
@@ -59,7 +60,7 @@ int main(int argc, char ** argv) {
 
     if (result["binary"].count()) {
         for (auto const &f : result["binary"].as<std::vector<std::string>>()) {
-            auto type = is_lib(fs::canonical(f)) ? deploy_t::LIBRARY : deploy_t::EXECUTABLE;
+            auto type = fs::exists(f) && is_lib(fs::canonical(f)) ? deploy_t::LIBRARY : deploy_t::EXECUTABLE;
             auto val = from_path(type, found_t::NONE, f);
             if (val != std::nullopt)
                 pool.push_back(*val);
@@ -88,11 +89,12 @@ int main(int argc, char ** argv) {
     auto ld_conf = parse_ld_conf(result["ldconf"].as<std::string>());
 
     // Walk the dependency tree
+    bool print_paths = result.count("path") > 0;
     deps::verbosity_t verbosity = result.count("all") ? deps::verbosity_t::VERY_VERBOSE
                                                       : result.count("v") ? deps::verbosity_t::VERBOSE
                                                                          : deps::verbosity_t::NONE;
 
-    deps tree{std::move(pool), std::move(ld_conf), std::move(ld_library_paths), std::move(generatedExcludelist), verbosity};
+    deps tree{std::move(pool), std::move(ld_conf), std::move(ld_library_paths), std::move(generatedExcludelist), verbosity, print_paths};
 
     std::cout << '\n';
 

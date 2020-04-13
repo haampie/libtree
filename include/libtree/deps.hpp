@@ -20,7 +20,8 @@ public:
         std::vector<fs::path> &&ld_so_conf,
         std::vector<fs::path> &&ld_library_paths,
         std::unordered_set<std::string> &&skip,
-        verbosity_t verbose
+        verbosity_t verbose,
+        bool print_paths
     );
 
     std::vector<Elf> const &get_deps() const;
@@ -49,4 +50,5 @@ private:
     std::vector<Elf> m_all_binaries;
 
     verbosity_t m_verbosity;
+    bool m_print_paths;
 };

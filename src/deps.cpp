@@ -18,12 +18,14 @@ deps::deps(
     std::vector<fs::path> &&ld_so_conf, 
     std::vector<fs::path> &&ld_library_paths,
     std::unordered_set<std::string> &&skip,
-    deps::verbosity_t verbose) 
+    deps::verbosity_t verbose,
+    bool print_paths) 
     : m_top_level(std::move(input)), 
       m_ld_library_paths(std::move(ld_library_paths)),
       m_ld_so_conf(std::move(ld_so_conf)),
       m_skip(std::move(skip)),
-      m_verbosity(verbose)
+      m_verbosity(verbose),
+      m_print_paths(print_paths)
 {
     std::vector<fs::path> rpaths;
     for (auto const &elf : m_top_level)
@@ -72,7 +74,7 @@ void deps::explore(Elf const &parent, std::vector<fs::path> &rpaths, std::vector
     if (!excluded && !cached)
         std::cout << termcolor::bold;
 
-    std::cout << parent.name 
+    std::cout << (m_print_paths && fs::exists(parent.abs_path) ? fs::canonical(parent.abs_path).string() : parent.name)
               << (excluded ? " (skipped)" : cached ? " (visited)" : "") 
               << termcolor::reset;
 
