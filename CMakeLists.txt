@@ -5,8 +5,11 @@ include(GNUInstallDirs)
 
 option(USE_SYSTEM_DEPS "Use system cppglob, cxxopts, termcolor and elfio" OFF)
 
+set(BUILD_SHARED OFF CACHE BOOL "Build shared version of deps")
+set(BUILD_STATIC ON CACHE BOOL "Build static version of deps")
+
 if(NOT USE_SYSTEM_DEPS)
-    add_subdirectory(deps)
+    add_subdirectory(deps EXCLUDE_FROM_ALL)
 endif()
 
 set(SOURCE
@@ -19,15 +22,21 @@ set(SOURCE
 )
 
 add_executable(libtree ${SOURCE})
-target_include_directories(libtree PRIVATE
-    include
-    ${CMAKE_CURRENT_BINARY_DIR}
-)
+target_include_directories(libtree PRIVATE include)
 
 if(USE_SYSTEM_DEPS)
     target_link_libraries(libtree cppglob)
 else()
-    target_link_libraries(libtree cxxopts termcolor cppglob ELFIO)
+    target_link_libraries(libtree cxxopts termcolor ELFIO)
+
+    # Todo, fix hardcoded SHARED/STATIC + separate targets
+    # upstream to avoid the branch + variables here
+    if (BUILD_SHARED)
+        target_link_libraries(libtree cppglob)
+    else()
+        target_link_libraries(libtree cppglob_static)
+    endif()
+    
     target_include_directories(libtree PRIVATE
         deps/cppglob/include
         deps/termcolors/include
