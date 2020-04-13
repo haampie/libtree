@@ -47,6 +47,10 @@ By default certain standard depenendencies are not shown. For more verbose outpu
 -  `libtree -v $(which man)` to show skipped libraries without their children
 -  `libtree -a $(which apt-get)` to show the full recursive list of libraries
 
+Show full paths instead of SONAME's is done via the `--path` flag:
+
+- `libtree -p $(which tar)`
+
 ## Changing search paths
 `libtree` follows the rules of `ld.so` to locate libraries, but does not use `ldconfig`'s
 cache. Instead it parses `/etc/ld.so.conf` at runtime. In fact you can change the search
