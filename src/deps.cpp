@@ -117,7 +117,7 @@ void deps::explore(Elf const &parent, std::vector<fs::path> &rpaths, std::vector
 
     // First detect all needed libs
     for (auto const &lib : parent.needed) {
-        auto result = locate(parent, lib, total_rpaths, parent.runpaths);
+        auto result = locate(parent, lib, total_rpaths);
 
         if (m_verbosity == verbosity_t::NONE && result && m_skip.count(result->name) > 0)
             continue;
@@ -174,42 +174,42 @@ void deps::print_error(fs::path const &lib, std::vector<fs::path> const &rpaths,
     std::cout << '\n';
 }
 
-std::optional<Elf> deps::locate(Elf const &parent, fs::path const &so, std::vector<fs::path> const &rpaths, std::vector<fs::path> const &runpaths) {
+std::optional<Elf> deps::locate(Elf const &parent, fs::path const &so, std::vector<fs::path> const &rpaths) {
     // Empty, not sure if that even can happen... but it's a no-go.
     if (so.empty())
         return std::nullopt;
 
     // A convoluted way to see if there is just _one_ component
     else if (++so.begin() == so.end())
-        return locate_by_search(so, rpaths, runpaths);
+        return locate_by_search(parent, so, rpaths);
 
     else
         return locate_directly(parent, so);
 }
 
-std::optional<Elf> deps::locate_by_search(fs::path const &so, std::vector<fs::path> const &rpaths, std::vector<fs::path> const &runpaths) {
+std::optional<Elf> deps::locate_by_search(Elf const &parent, fs::path const &so, std::vector<fs::path> const &rpaths) {
     std::optional<Elf> result{std::nullopt};
 
     // If there is no RUNPATH and >= 1 RPATH, use RPATH
-    if (runpaths.size() == 0 && rpaths.size() > 0) {
-        result = find_by_paths(so, rpaths, found_t::RPATH);
+    if (parent.runpaths.size() == 0 && rpaths.size() > 0) {
+        result = find_by_paths(parent, so, rpaths, found_t::RPATH);
         if (result) return result;
     }
 
     // Try LD_LIBRARY_PATH
-    result = find_by_paths(so, m_ld_library_paths, found_t::LD_LIBRARY_PATH);
+    result = find_by_paths(parent, so, m_ld_library_paths, found_t::LD_LIBRARY_PATH);
     if (result) return result;
 
     // Try RUNPATH
-    result = find_by_paths(so, runpaths, found_t::RUNPATH);
+    result = find_by_paths(parent, so, parent.runpaths, found_t::RUNPATH);
     if (result) return result;
 
     // Try ld.so.conf
-    result = find_by_paths(so, m_ld_so_conf, found_t::LD_SO_CONF);
+    result = find_by_paths(parent, so, m_ld_so_conf, found_t::LD_SO_CONF);
     if (result) return result;
 
     // Try standard search paths
-    result = find_by_paths(so, m_default_paths, found_t::DEFAULT_PATHS);
+    result = find_by_paths(parent, so, m_default_paths, found_t::DEFAULT_PATHS);
     if (result) return result;
 
     return result;
@@ -224,18 +224,18 @@ std::optional<Elf> deps::locate_directly(Elf const &parent, fs::path const &so) 
         full_path = cwd / so;
     }
 
-    return fs::exists(full_path) ? from_path(deploy_t::LIBRARY, found_t::DIRECT, full_path.string())
+    return fs::exists(full_path) ? from_path(deploy_t::LIBRARY, found_t::DIRECT, full_path.string(), parent.elf_type)
                                  : std::nullopt;
 }
 
-std::optional<Elf> deps::find_by_paths(fs::path const &so, std::vector<fs::path> const &paths, found_t tag) {
+std::optional<Elf> deps::find_by_paths(Elf const &parent, fs::path const &so, std::vector<fs::path> const &paths, found_t tag) {
     for (auto const &path : paths) {
         auto full = path / so;
 
         if (!fs::exists(full))
             continue;
 
-        auto result = from_path(deploy_t::LIBRARY, tag, full.string());
+        auto result = from_path(deploy_t::LIBRARY, tag, full.string(), parent.elf_type);
 
         if (result) return result;
     }

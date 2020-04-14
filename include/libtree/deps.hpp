@@ -36,10 +36,10 @@ private:
     std::string get_indent(std::vector<bool> const &done) const;
     std::string get_error_indent(std::vector<bool> const &done) const;
 
-    std::optional<Elf> locate(Elf const &parent, fs::path const &so, std::vector<fs::path> const &rpaths, std::vector<fs::path> const &runpaths);
+    std::optional<Elf> locate(Elf const &parent, fs::path const &so, std::vector<fs::path> const &rpaths);
     std::optional<Elf> locate_directly(Elf const &parent, fs::path const &so);
-    std::optional<Elf> locate_by_search(fs::path const &so, std::vector<fs::path> const &rpaths, std::vector<fs::path> const &runpaths);
-    std::optional<Elf> find_by_paths(fs::path const &so, std::vector<fs::path> const &paths, found_t tag);
+    std::optional<Elf> locate_by_search(Elf const &parent, fs::path const &so, std::vector<fs::path> const &rpaths);
+    std::optional<Elf> find_by_paths(Elf const &parent, fs::path const &so, std::vector<fs::path> const &paths, found_t tag);
 
     size_t m_depth = 0;
     std::vector<Elf> m_top_level;
