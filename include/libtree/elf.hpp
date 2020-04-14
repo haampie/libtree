@@ -34,10 +34,10 @@ struct PathHash {
 };
 
 // Applies substitutions like $ORIGIN := current work directory
-fs::path apply_substitutions(fs::path const &rpath, fs::path const &cwd);
+fs::path apply_substitutions(fs::path const &rpath, fs::path const &cwd, std::string const &platform);
 
 // Turns path1:path2 into [path1, path2]
 std::vector<fs::path> split_paths(std::string_view raw_path);
 
 // Try to create an elf from a path
-std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path path_str, std::optional<elf_type_t> required_type = std::nullopt);
+std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path path_str, std::string const &platform, std::optional<elf_type_t> required_type = std::nullopt);

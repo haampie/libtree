@@ -36,16 +36,14 @@ size_t PathHash::operator()(fs::path const &path) const {
 }
 
 // Applies substitutions like $ORIGIN := current work directory
-fs::path apply_substitutions(fs::path const &rpath, fs::path const &cwd, elf_type_t type) {
+fs::path apply_substitutions(fs::path const &rpath, fs::path const &cwd, elf_type_t type, std::string const &platform) {
 	std::string path = rpath;
 
     auto substitute_lib = (type == elf_type_t::ELF_32 ? "lib" : "lib64");
 	
 	path = std::regex_replace(path, s_origin, cwd.string());
 	path = std::regex_replace(path, s_lib, substitute_lib);
-
-    // TODO: remove hard-coded platform string.
-	path = std::regex_replace(path, s_platform, "x86_64");
+	path = std::regex_replace(path, s_platform, platform);
 
 	return path;
 }
@@ -64,7 +62,7 @@ std::vector<fs::path> split_paths(std::string_view raw_path) {
     return rpaths;
 }
 
-std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path path_str, std::optional<elf_type_t> required_type) {
+std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path path_str, std::string const &platform, std::optional<elf_type_t> required_type) {
     // Extract some data from the elf file.
     std::vector<fs::path> needed, rpaths, runpaths;
 
@@ -110,10 +108,10 @@ std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path path_str
                 needed.push_back(str);
             } else if (tag == DT_RUNPATH) {
                 for (auto const &path : split_paths(str))
-                    runpaths.push_back(apply_substitutions(path, cwd, elf_type));
+                    runpaths.push_back(apply_substitutions(path, cwd, elf_type, platform));
             } else if (tag == DT_RPATH) {
                 for (auto const &path : split_paths(str))
-                    rpaths.push_back(apply_substitutions(path, cwd, elf_type));
+                    rpaths.push_back(apply_substitutions(path, cwd, elf_type, platform));
             } else if (tag == DT_SONAME) {
                 name = str;
             } else if (tag == DT_NULL) {
