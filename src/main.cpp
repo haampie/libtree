@@ -1,3 +1,5 @@
+#include <sys/auxv.h>
+
 #include <cxxopts.hpp>
 #include <termcolor/termcolor.hpp>
 
@@ -14,6 +16,8 @@ namespace fs = std::filesystem;
 int main(int argc, char ** argv) {
     cxxopts::Options options("libtree", "Show the dependency tree of binaries and optionally bundle them into a single folder.");
 
+    auto default_platform = reinterpret_cast<char const *>(getauxval(AT_PLATFORM));
+
     // Use the strip and chrpath that we ship if we can detect them
     std::string strip = "strip";
     std::string chrpath = "chrpath";
@@ -26,6 +30,7 @@ int main(int argc, char ** argv) {
       ("a,all", "Show the skipped libraries and their children", cxxopts::value<bool>()->default_value("false"))
       ("l,ldconf", "Path to custom ld.conf to test settings", cxxopts::value<std::string>()->default_value("/etc/ld.so.conf"))
       ("s,skip", "Skip library and its dependencies from being deployed or inspected", cxxopts::value<std::vector<std::string>>())
+      ("platform", "Platform used for interpolation in rpaths", cxxopts::value<std::string>()->default_value(default_platform))
       ("b,binary", "Binary to inspect", cxxopts::value<std::vector<std::string>>());
 
     options.add_options("B. Copying libs")
@@ -46,12 +51,17 @@ int main(int argc, char ** argv) {
         return 0;
     }
 
+    auto platform = result["platform"].as<std::string>();
+
     std::vector<Elf> pool;
 
     if (result["binary"].count()) {
-        for (auto const &f : result["binary"].as<std::vector<std::string>>()) {
-            auto type = fs::exists(f) && is_lib(fs::canonical(f)) ? deploy_t::LIBRARY : deploy_t::EXECUTABLE;
-            auto val = from_path(type, found_t::NONE, f);
+        for (auto const &binary : result["binary"].as<std::vector<std::string>>()) {
+            if (!fs::exists(binary))
+                continue;
+
+            auto type = is_lib(fs::canonical(binary)) ? deploy_t::LIBRARY : deploy_t::EXECUTABLE;
+            auto val = from_path(type, found_t::NONE, binary, platform);
             if (val != std::nullopt)
                 pool.push_back(*val);
         }
@@ -84,7 +94,15 @@ int main(int argc, char ** argv) {
                                                       : result.count("v") ? deps::verbosity_t::VERBOSE
                                                                          : deps::verbosity_t::NONE;
 
-    deps tree{std::move(pool), std::move(ld_conf), std::move(ld_library_paths), std::move(generatedExcludelist), verbosity, print_paths};
+    deps tree{
+        std::move(pool),
+        std::move(ld_conf),
+        std::move(ld_library_paths),
+        std::move(generatedExcludelist),
+        platform,
+        verbosity,
+        print_paths
+    };
 
     std::cout << '\n';
 

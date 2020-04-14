@@ -27,12 +27,14 @@ deps::deps(
     std::vector<fs::path> &&ld_so_conf, 
     std::vector<fs::path> &&ld_library_paths,
     std::unordered_set<std::string> &&skip,
+    std::string const &platform,
     deps::verbosity_t verbose,
     bool print_paths) 
     : m_top_level(std::move(input)), 
       m_ld_library_paths(std::move(ld_library_paths)),
       m_ld_so_conf(std::move(ld_so_conf)),
       m_skip(std::move(skip)),
+      m_platform(std::move(platform)),
       m_verbosity(verbose),
       m_print_paths(print_paths)
 {
@@ -224,7 +226,7 @@ std::optional<Elf> deps::locate_directly(Elf const &parent, fs::path const &so) 
         full_path = cwd / so;
     }
 
-    return fs::exists(full_path) ? from_path(deploy_t::LIBRARY, found_t::DIRECT, full_path.string(), parent.elf_type)
+    return fs::exists(full_path) ? from_path(deploy_t::LIBRARY, found_t::DIRECT, full_path.string(), m_platform, parent.elf_type)
                                  : std::nullopt;
 }
 
@@ -235,7 +237,7 @@ std::optional<Elf> deps::find_by_paths(Elf const &parent, fs::path const &so, st
         if (!fs::exists(full))
             continue;
 
-        auto result = from_path(deploy_t::LIBRARY, tag, full.string(), parent.elf_type);
+        auto result = from_path(deploy_t::LIBRARY, tag, full.string(), m_platform, parent.elf_type);
 
         if (result) return result;
     }

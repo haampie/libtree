@@ -6,11 +6,11 @@
 libtree \- print shared object dependencies as a tree
 .SH SYNOPSIS
 .B libtree 
-.R [
+[
 .I option
-.R ]... [
+]... [
 .I file
-.R ]...
+]...
 .SH DESCRIPTION
 .B libtree
 prints the shared libraries required by each program or shared library on the command line as a tree, and optionally copies them over to a directory. By default certain common system libraries are not shown to prune the tree.
@@ -34,6 +34,13 @@ file
 Mark the shared library library
 .I lib
 as skipped
+.IP "--platform arg"
+Expand
+.I $PLATFORM
+in rpaths as
+.I arg
+instead of the default value from
+.B AT_PLATFORM
 .IP "-d, --destination \fIpath\fI"
 Copy all executables and shared libraries over to a directory
 .I path
