@@ -12,9 +12,12 @@ enum class deploy_t { EXECUTABLE, LIBRARY };
 
 enum class found_t { NONE, DIRECT, RPATH, LD_LIBRARY_PATH, RUNPATH, LD_SO_CONF, DEFAULT_PATHS };
 
+enum class elf_type_t { ELF_32, ELF_64 };
+
 struct Elf {
     deploy_t type;
     found_t found_via;
+    elf_type_t elf_type;
     std::string name;
     fs::path abs_path;
     std::vector<fs::path> runpaths;
@@ -37,4 +40,4 @@ fs::path apply_substitutions(fs::path const &rpath, fs::path const &cwd);
 std::vector<fs::path> split_paths(std::string_view raw_path);
 
 // Try to create an elf from a path
-std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path path_str);
+std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path path_str, std::optional<elf_type_t> required_type = std::nullopt);
