@@ -6,11 +6,20 @@
 
 #include <variant>
 
-std::string repeat(std::string_view input, size_t num)
-{
-    std::ostringstream os;
-    std::fill_n(std::ostream_iterator<std::string_view>(os), num, input);
-    return os.str();
+bool is_lib(fs::path const &p) {
+    auto filename = p.filename().string();
+
+    // Should start with `lib`
+    if (filename.find("lib") != 0)
+        return false;
+
+    // And the first part of the extension is `.so`
+    auto idx = filename.find('.');
+    
+    if (idx == std::string::npos)
+        return false;
+
+    return filename.find("so", idx) == idx + 1;
 }
 
 deps::deps(

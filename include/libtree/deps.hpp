@@ -10,6 +10,8 @@
 template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
+bool is_lib(fs::path const &p);
+
 class deps {
 
 public:

@@ -11,16 +11,6 @@
 
 namespace fs = std::filesystem;
 
-bool is_lib(fs::path const &p) {
-    if (!p.has_extension())
-        return false;
-
-    if (p.stem().string().find("lib") != 0)
-        return false;
-
-    return p.extension().string().find("so") == 0;
-}
-
 int main(int argc, char ** argv) {
     cxxopts::Options options("libtree", "Show the dependency tree of binaries and optionally bundle them into a single folder.");
 
