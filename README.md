@@ -1,3 +1,5 @@
+![Test](https://github.com/haampie/libtree/workflows/Test/badge.svg?branch=master)
+
 # libtree
 
 A tool that:
