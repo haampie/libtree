@@ -75,4 +75,3 @@ make install
   changed when the binaries already have an an rpath or runpath. This is a limitation of
   `chrpath`. Another option is to use `patchelf` instead, but this tool is known to break
   binaries sometimes.
-- There's no support yet for i386.
