@@ -18,7 +18,7 @@ void deploy(std::vector<Elf> const &deps, fs::path const &bin, fs::path const &l
         
         // Create all symlinks
         if (elf.type == deploy_t::LIBRARY) {
-            for (auto link = elf.abs_path; fs::is_symlink(link); link = fs::read_symlink(link)) {
+            for (auto link = elf.abs_path; fs::is_symlink(link) && link.filename() != canonical.filename(); link = fs::read_symlink(link)) {
                 auto link_destination = deploy_folder / link.filename();
                 fs::remove(link_destination);
                 fs::create_symlink(deploy_path.filename(), link_destination);
