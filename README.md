@@ -7,6 +7,8 @@ A tool that:
 - :point_up: explains why shared libraries are found and why not
 - :package: optionally deploys executables and dependencies into a single directory
 
+![example](doc/screenshot.png)
+
 ## Installation
 Download the [**latest release**](https://github.com/haampie/libtree/releases) from Github:
 
@@ -17,11 +19,7 @@ ln -s $(realpath ./libtree/libtree) /usr/local/bin/
 libtree $(which man)
 ```
 
-## Example 1: listing the dependencies of an executable
-
-![example](doc/screenshot.png)
-
-## Example 2: deploying binaries + dependencies into a folder
+## Deploying binaries + dependencies into a folder
 ```bash
 $ libtree $(which libtree) -d libtree.bundle --chrpath --strip
 libtree
@@ -49,7 +47,7 @@ By default certain standard depenendencies are not shown. For more verbose outpu
 -  `libtree -v $(which man)` to show skipped libraries without their children
 -  `libtree -a $(which apt-get)` to show the full recursive list of libraries
 
-Use the `--path` or `-p` flags to show paths rather than soname's:
+Use the `--path` or `-p` flags to show paths rather than sonames:
 
 - `libtree -p $(which tar)`
 
@@ -59,16 +57,22 @@ cache. Instead it parses `/etc/ld.so.conf` at runtime. In fact you can change th
 path config by setting `--ldconf mylibs.conf`. Search paths can be added as well via 
 `LD_LIBRARY_PATH="path1:path2:$LD_LIBRARY_PATH" libtree ...`.
 
-## Build from source 
-```bash
-git clone --recursive https://github.com/haampie/libtree.git
-cd libtree
-mkdir build
-cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-make
-make install
-```
+## Building
+- **From source**:
+  ```bash
+  git clone --recursive https://github.com/haampie/libtree.git
+  cd libtree
+  mkdir build
+  cd build
+  cmake -DCMAKE_BUILD_TYPE=Release ..
+  make
+  make install
+  ```
+- **Using [spack](https://github.com/spack/spack)**:
+  ```
+  spack install libtree
+  spack load libtree
+  ```
 
 ## Known issues
 - When deploying libs with `libtree app -d folder.bundle --chrpath`, the runpaths are only
