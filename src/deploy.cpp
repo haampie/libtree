@@ -15,16 +15,14 @@ void deploy(std::vector<Elf> const &deps, fs::path const &bin, fs::path const &l
         fs::copy_file(canonical, deploy_path, fs::copy_options::overwrite_existing);
 
         std::cout << termcolor::green << canonical << termcolor::reset << " => " << termcolor::green << deploy_path << termcolor::reset << '\n';
-        
-        // Create all symlinks
-        if (elf.type == deploy_t::LIBRARY) {
-            for (auto link = elf.abs_path; fs::is_symlink(link) && link.filename() != canonical.filename(); link = fs::read_symlink(link)) {
-                auto link_destination = deploy_folder / link.filename();
-                fs::remove(link_destination);
-                fs::create_symlink(deploy_path.filename(), link_destination);
 
-                std::cout << "  " << termcolor::yellow << "creating symlink " << link_destination << termcolor::reset << '\n';
-            }
+        // Create all symlinks
+        for (auto link = elf.abs_path; fs::is_symlink(link) && link.filename() != canonical.filename(); link = fs::read_symlink(link)) {
+            auto link_destination = deploy_folder / link.filename();
+            fs::remove(link_destination);
+            fs::create_symlink(deploy_path.filename(), link_destination);
+
+            std::cout << "  " << termcolor::yellow << "creating symlink " << link_destination << termcolor::reset << '\n';
         }
 
         auto rpath = (elf.type == deploy_t::EXECUTABLE ? "\\$ORIGIN/../lib" : "\\$ORIGIN");
