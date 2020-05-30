@@ -1,30 +1,48 @@
 name: Test
 
-on: 
+on:
   - push
   - pull_request
 
 jobs:
   test:
-    runs-on: ubuntu-18.04
-    
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: ["ubuntu:latest", "fedora:latest"]
+        compiler:
+          - { CC: "clang", CXX: "clang++" }
+          - { CC: "gcc", CXX: "g++" }
+    runs-on: ubuntu-latest
+    container: ${{ matrix.distro }}
     steps:
+    - name: Install Ubuntu dependencies
+      if: startsWith(matrix.distro, 'ubuntu')
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        apt-get update
+        apt-get install -y cmake clang gcc git build-essential
+
+    - name: Install Fedora dependencies
+      if: startsWith(matrix.distro, 'fedora')
+      run: dnf --refresh install -y cmake clang gcc git diffutils make
+
     - uses: actions/checkout@v2
       with:
         submodules: recursive
 
-    - name: Install tools
-      run: sudo apt-get update -qq && sudo apt-get install -qq g++-8
-
-    - name: Build
+    - name: Build with ${{ matrix.compiler.CC }}
+      env:
+        CC: ${{ matrix.compiler.CC }}
+        CXX: ${{ matrix.compiler.CXX }}
       run: |
-          mkdir build 
-          cd build 
-          CXX=g++-8 cmake -DBUILD_TESTING=ON .. 
-          make -j$(nproc)
+        mkdir build
+        cd build
+        cmake -DCMAKE_VERBOSE_MAKEFILE=ON -DBUILD_TESTING=ON ..
+        cmake --build . -j$(nproc)
 
     - name: Test
       run: |
         cd build
-        ctest
-           
+        CTEST_OUTPUT_ON_FAILURE=1 ctest
