@@ -1,4 +1,5 @@
 ![Test](https://github.com/haampie/libtree/workflows/Test/badge.svg?branch=master)
+[![AUR version](https://img.shields.io/aur/version/libtree?logo=Arch-Linux)](https://aur.archlinux.org/packages/libtree/)
 
 # libtree
 
