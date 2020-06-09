@@ -46,7 +46,7 @@ private:
     std::vector<Elf> m_top_level;
     std::vector<fs::path> m_ld_library_paths;
     std::vector<fs::path> m_ld_so_conf;
-    std::vector<fs::path> m_default_paths{"/lib", "/usr/lib"};
+    std::vector<fs::path> m_default_paths{"/lib", "/usr/lib", "/lib64", "/usr/lib64"};
     std::unordered_set<fs::path, PathHash> m_visited;
     std::unordered_set<std::string> m_skip;
 
