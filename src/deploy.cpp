@@ -12,7 +12,12 @@ void deploy(std::vector<Elf> const &deps, fs::path const &bin, fs::path const &l
         // Copy to the deploy folder
         auto deploy_folder = (elf.type == deploy_t::EXECUTABLE ? bin : lib);
         auto deploy_path = deploy_folder / canonical.filename();
-        fs::copy_file(canonical, deploy_path, fs::copy_options::overwrite_existing);
+        try {
+            fs::copy_file(canonical, deploy_path, fs::copy_options::overwrite_existing);
+        } catch (fs::filesystem_error& e) {
+            std::cerr << "Could not overwrite existing file. Skipping with error:\n\t"
+                      << e.what() << '\n';
+        }
 
         std::cout << termcolor::green << canonical << termcolor::reset << " => " << termcolor::green << deploy_path << termcolor::reset << '\n';
 
