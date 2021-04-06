@@ -86,7 +86,7 @@ void deps::explore(Elf const &parent, std::vector<fs::path> &rpaths, std::vector
         std::cout << termcolor::bold;
 
     std::cout << (m_print_paths && fs::exists(parent.abs_path) ? fs::canonical(parent.abs_path).string() : parent.name)
-              << (excluded ? " (skipped)" : cached ? " (visited)" : "") 
+              << (excluded ? " (skipped)" : cached ? " (collapsed)" : "")
               << termcolor::reset;
 
     std::cout << (excluded ? termcolor::magenta : cached ? termcolor::blue : termcolor::yellow);
