@@ -16,7 +16,7 @@ Download the [**latest release**](https://github.com/haampie/libtree/releases) f
 ```bash
 wget https://github.com/haampie/libtree/releases/download/v1.2.1/libtree_x86_64.tar.gz
 tar -xzf libtree_x86_64.tar.gz
-ln -s $(realpath ./libtree/libtree) /usr/local/bin/
+ln -s $(realpath ./libtree/libtree) /usr/local/bin/libtree
 libtree $(which man)
 ```
 
