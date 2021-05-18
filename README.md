@@ -22,25 +22,43 @@ libtree $(which man)
 
 ## Deploying binaries + dependencies into a folder
 ```bash
-$ libtree $(which libtree) -d libtree.bundle --chrpath --strip
-libtree
-└── libcppglob.so.1 [runpath]
+$ libtree $(which man) -d man.bundle --chrpath --strip
+man
+├── libmandb-2.9.1.so [runpath]
+│   ├── libman-2.9.1.so [runpath]
+│   │   ├── libpipeline.so.1 [ld.so.conf]
+│   │   └── libseccomp.so.2 [ld.so.conf]
+│   └── libgdbm.so.6 [ld.so.conf]
+├── libman-2.9.1.so (collapsed) [runpath]
+└── libpipeline.so.1 (collapsed) [ld.so.conf]
 
-Deploying to "libtree.bundle/usr"
-"/bundler/build/libtree" => "libtree.bundle/usr/bin/libtree"
-"/bundler/build/lib/libcppglob.so.1.1.0" => "libtree.bundle/usr/lib/libcppglob.so.1.1.0"
-  creating symlink "libtree.bundle/usr/lib/libcppglob.so.1"
+Deploying to "man.bundle/usr"
+"/usr/bin/man" => "man.bundle/usr/bin/man"
+"/usr/lib/man-db/libmandb-2.9.1.so" => "man.bundle/usr/lib/libmandb-2.9.1.so"
+"/usr/lib/man-db/libman-2.9.1.so" => "man.bundle/usr/lib/libman-2.9.1.so"
+"/usr/lib/x86_64-linux-gnu/libpipeline.so.1.5.2" => "man.bundle/usr/lib/libpipeline.so.1.5.2"
+  creating symlink "man.bundle/usr/lib/libpipeline.so.1"
+"/usr/lib/x86_64-linux-gnu/libseccomp.so.2.5.1" => "man.bundle/usr/lib/libseccomp.so.2.5.1"
+  creating symlink "man.bundle/usr/lib/libseccomp.so.2"
+"/usr/lib/x86_64-linux-gnu/libgdbm.so.6.0.0" => "man.bundle/usr/lib/libgdbm.so.6.0.0"
+  creating symlink "man.bundle/usr/lib/libgdbm.so.6"
 
-$ tree libtree.bundle/
-libtree.bundle/
+$ tree man.bundle/
+man.bundle/
 └── usr
     ├── bin
-    │   └── libtree
+    │   └── man
     └── lib
-        ├── libcppglob.so.1 -> libcppglob.so.1.1.0
-        └── libcppglob.so.1.1.0
+        ├── libgdbm.so.6 -> libgdbm.so.6.0.0
+        ├── libgdbm.so.6.0.0
+        ├── libman-2.9.1.so
+        ├── libmandb-2.9.1.so
+        ├── libpipeline.so.1 -> libpipeline.so.1.5.2
+        ├── libpipeline.so.1.5.2
+        ├── libseccomp.so.2 -> libseccomp.so.2.5.1
+        └── libseccomp.so.2.5.1
 
-3 directories, 3 files
+3 directories, 9 files
 ```
 
 ## Verbose output
