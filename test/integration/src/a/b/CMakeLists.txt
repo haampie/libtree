@@ -7,4 +7,4 @@ add_subdirectory(c)
 
 add_library(libb SHARED ${CMAKE_CURRENT_LIST_DIR}/libb.c)
 target_link_libraries(libb PRIVATE libc)
-set_target_properties(libb PROPERTIES LINK_FLAGS "-Wl,--enable-new-dtags,-rpath,$ORIGIN/c")
+set_target_properties(libb PROPERTIES LINK_FLAGS "-Wl,--enable-new-dtags,-rpath,\\$ORIGIN/c")
