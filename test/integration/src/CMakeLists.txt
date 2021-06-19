@@ -7,4 +7,4 @@ add_subdirectory(a)
 
 add_executable(main ${CMAKE_CURRENT_LIST_DIR}/main.c)
 target_link_libraries(main PRIVATE liba)
-set_target_properties(main PROPERTIES LINK_FLAGS "-Wl,--disable-new-dtags,-rpath,\\$ORIGIN/a,-rpath-link,a,-rpath-link,a/b,-rpath-link,a/b/c")
+set_target_properties(main PROPERTIES LINK_FLAGS "-Wl,--disable-new-dtags,-rpath,\\$ORIGIN/a")
