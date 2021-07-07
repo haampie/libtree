@@ -13,6 +13,14 @@ jobs:
         compiler:
           - { CC: "clang", CXX: "clang++" }
           - { CC: "gcc", CXX: "g++" }
+        build_generator:
+          - "Unix Makefiles"
+        include:
+          # Only want to test Ninja on one job
+          - distro: "ubuntu:latest"
+            compiler: { CC: "clang", CXX: "clang++" }
+            build_generator: "Ninja"
+
     runs-on: ubuntu-latest
     container: ${{ matrix.distro }}
     steps:
@@ -22,7 +30,7 @@ jobs:
         DEBIAN_FRONTEND: noninteractive
       run: |
         apt-get update
-        apt-get install -y cmake clang gcc git build-essential
+        apt-get install -y cmake clang gcc git build-essential ninja-build
 
     - name: Install Fedora dependencies
       if: startsWith(matrix.distro, 'fedora')
@@ -39,7 +47,7 @@ jobs:
       run: |
         mkdir build
         cd build
-        cmake -DCMAKE_VERBOSE_MAKEFILE=ON -DBUILD_TESTING=ON ..
+        cmake -G "${{ matrix.build_generator }}" -DCMAKE_VERBOSE_MAKEFILE=ON -DBUILD_TESTING=ON ..
         cmake --build . -j$(nproc)
 
     - name: Test
