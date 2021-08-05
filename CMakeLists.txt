@@ -27,7 +27,7 @@ set(SOURCES
 )
 
 # Add the library
-add_library(libtree_lib STATIC ${SOURCES})
+add_library(libtree_lib OBJECT ${SOURCES})
 set_target_properties(libtree_lib PROPERTIES OUTPUT_NAME libtree)
 target_include_directories(libtree_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include ${PROJECT_BINARY_DIR})
 
