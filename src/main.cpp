@@ -1,4 +1,6 @@
+#if defined(LIBTREE_HAS_AUXV_HEADER)
 #include <sys/auxv.h>
+#endif
 
 #include <cxxopts.hpp>
 #include <termcolor/termcolor.hpp>
@@ -16,7 +18,12 @@ namespace fs = std::filesystem;
 int main(int argc, char ** argv) {
     cxxopts::Options options("libtree", "Show the dependency tree of binaries and optionally bundle them into a single folder.");
 
+#if defined(LIBTREE_HAS_AUXV_HEADER)
     auto default_platform = reinterpret_cast<char const *>(getauxval(AT_PLATFORM));
+#else
+    // Default to x86_64 substitution for PLATFORM if getauxval is not available.
+    auto default_platform = "x86_64";
+#endif
 
     // Use the strip and chrpath that we ship if we can detect them
     std::string strip = "strip";

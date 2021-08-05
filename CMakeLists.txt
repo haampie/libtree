@@ -15,6 +15,9 @@ if(NOT USE_SYSTEM_DEPS)
     add_subdirectory(deps EXCLUDE_FROM_ALL)
 endif()
 
+include(CheckIncludeFiles)
+check_include_files("sys/auxv.h" LIBTREE_HAS_AUXV_HEADER)
+
 set(SOURCES
    ${CMAKE_CURRENT_SOURCE_DIR}/src/deploy.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/src/deps.cpp
@@ -52,6 +55,7 @@ endif()
 # And the main cli tool
 add_executable(libtree ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp)
 target_link_libraries(libtree libtree_lib)
+target_compile_definitions(libtree PRIVATE $<$<BOOL:${LIBTREE_HAS_AUXV_HEADER}>:LIBTREE_HAS_AUXV_HEADER>)
 
 set_property(TARGET libtree_lib PROPERTY CXX_STANDARD 17)
 set_property(TARGET libtree PROPERTY CXX_STANDARD 17)
