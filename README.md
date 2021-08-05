@@ -14,7 +14,7 @@ A tool that:
 Download the [**latest release**](https://github.com/haampie/libtree/releases) from Github:
 
 ```bash
-wget https://github.com/haampie/libtree/releases/download/v1.2.2/libtree_x86_64.tar.gz
+wget https://github.com/haampie/libtree/releases/download/v1.2.3/libtree_x86_64.tar.gz
 tar -xzf libtree_x86_64.tar.gz
 ln -s $(realpath ./libtree/libtree) /usr/local/bin/libtree
 libtree $(which man)
