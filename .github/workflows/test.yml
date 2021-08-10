@@ -62,7 +62,6 @@ jobs:
             -DCXXOPTS_ENABLE_INSTALL=ON                            \
             -DCXXOPTS_BUILD_TESTS=OFF                              \
             -DCXXOPTS_BUILD_EXAMPLES=OFF                           \
-            -DCXXOPTS_ENABLE_WARNINGS=OFF                          \
             -DCXXOPTS_USE_UNICODE_HELP=OFF                         \
             .. && make install -j
         )
@@ -86,6 +85,17 @@ jobs:
           cd termcolor/build && cmake                              \
             -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/deps/prefix \
             -DTERMCOLOR_TESTS=OFF                                  \
+            .. && make install -j
+        )
+
+        (
+          curl -Lfso gtest.tar.gz https://github.com/google/googletest/archive/refs/tags/release-1.11.0.tar.gz
+          echo "b4870bf121ff7795ba20d20bcdd8627b8e088f2d1dab299a031c1034eddc93d5  gtest.tar.gz" | sha256sum --check --quiet
+          mkdir -p gtest/build && tar -xf gtest.tar.gz -C gtest --strip-components=1
+          cd gtest/build && cmake                                  \
+            -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/deps/prefix \
+            -DINSTALL_GTEST=ON                                     \
+            -DBUILD_GMOCK=OFF                                      \
             .. && make install -j
         )
 
