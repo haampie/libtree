@@ -30,11 +30,11 @@ jobs:
         DEBIAN_FRONTEND: noninteractive
       run: |
         apt-get update
-        apt-get install -y cmake clang gcc git build-essential ninja-build
+        apt-get install -y cmake clang gcc git build-essential ninja-build curl
 
     - name: Install Fedora dependencies
       if: startsWith(matrix.distro, 'fedora')
-      run: dnf --refresh install -y cmake clang gcc git diffutils make
+      run: dnf --refresh install -y cmake clang gcc git diffutils make curl
 
     - uses: actions/checkout@v2
 
