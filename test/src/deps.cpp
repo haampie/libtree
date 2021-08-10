@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <libtree/deps.hpp>
+#include <libtree/ld.hpp>
 
 TEST(example, add)
 {    
