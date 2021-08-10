@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 3.0)
-project (libtree VERSION 1.2.3)
+project (libtree VERSION 2.0.0)
 
 include(GNUInstallDirs)
 include(CTest)
