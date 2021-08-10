@@ -43,6 +43,7 @@ jobs:
         CC: ${{ matrix.compiler.CC }}
         CXX: ${{ matrix.compiler.CXX }}
       run: |
+        export PATH="${GITHUB_WORKSPACE}/deps/prefix/bin:$PATH"
         mkdir -p ${GITHUB_WORKSPACE}/deps/prefix
         cd ${GITHUB_WORKSPACE}/deps
 
