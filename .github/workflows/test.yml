@@ -67,7 +67,7 @@ jobs:
       run: |
         mkdir build
         cd build
-        cmake -G "${{ matrix.build_generator }}" -DLIBTREE_BUILD_TESTING=ON -DCMAKE_VERBOSE_MAKEFILE=ON -DCMAKE_PREFIX_PATH=deps/prefix ..
+        cmake -G "${{ matrix.build_generator }}" -DLIBTREE_BUILD_TESTS=ON -DCMAKE_VERBOSE_MAKEFILE=ON -DCMAKE_PREFIX_PATH=deps/prefix ..
         cmake --build . -j$(nproc)
 
     - name: Test
