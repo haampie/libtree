@@ -30,11 +30,11 @@ jobs:
         DEBIAN_FRONTEND: noninteractive
       run: |
         apt-get update
-        apt-get install -y cmake clang gcc git build-essential ninja-build curl
+        apt-get install -y clang gcc git build-essential ninja-build curl
 
     - name: Install Fedora dependencies
       if: startsWith(matrix.distro, 'fedora')
-      run: dnf --refresh install -y cmake clang gcc git diffutils make curl
+      run: dnf --refresh install -y clang gcc git diffutils make curl
 
     - uses: actions/checkout@v2
 
@@ -43,20 +43,26 @@ jobs:
         CC: ${{ matrix.compiler.CC }}
         CXX: ${{ matrix.compiler.CXX }}
       run: |
-        mkdir -p ${GITHUB_WORKSPACE}/deps ${GITHUB_WORKSPACE}/prefix
+        mkdir -p ${GITHUB_WORKSPACE}/deps/prefix
         cd ${GITHUB_WORKSPACE}/deps
+
+        (
+          curl -Lfso cmake.tar.gz https://github.com/Kitware/CMake/releases/download/v3.21.1/cmake-3.21.1-linux-x86_64.tar.gz
+          echo "bf496ce869d0aa8c1f57e4d1a2e50c8f2fb12a6cd7ccb37ad743bb88f6b76a1e  cmake.tar.gz" | sha256sum --check --quiet
+          tar -xf cmake.tar.gz -C ${GITHUB_WORKSPACE}/deps/prefix --strip-components=1
+        )
 
         (
           curl -Lfso cxxopts.tar.gz https://github.com/jarro2783/cxxopts/archive/refs/tags/v2.2.1.tar.gz
           echo "984aa3c8917d649b14d7f6277104ce38dd142ce378a9198ec926f03302399681  cxxopts.tar.gz" | sha256sum --check --quiet
           mkdir -p cxxopts/build && tar -xf cxxopts.tar.gz -C cxxopts --strip-components=1
-          cd cxxopts/build && cmake                           \
-            -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/prefix \
-            -DCXXOPTS_ENABLE_INSTALL=ON                       \
-            -DCXXOPTS_BUILD_TESTS=OFF                         \
-            -DCXXOPTS_BUILD_EXAMPLES=OFF                      \
-            -DCXXOPTS_ENABLE_WARNINGS=OFF                     \
-            -DCXXOPTS_USE_UNICODE_HELP=OFF                    \
+          cd cxxopts/build && cmake                                \
+            -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/deps/prefix \
+            -DCXXOPTS_ENABLE_INSTALL=ON                            \
+            -DCXXOPTS_BUILD_TESTS=OFF                              \
+            -DCXXOPTS_BUILD_EXAMPLES=OFF                           \
+            -DCXXOPTS_ENABLE_WARNINGS=OFF                          \
+            -DCXXOPTS_USE_UNICODE_HELP=OFF                         \
             .. && make install -j
         )
 
@@ -64,10 +70,10 @@ jobs:
           curl -Lfso elfio.tar.gz https://github.com/serge1/ELFIO/releases/download/Release_3.9/elfio-3.9.tar.gz
           echo "767b269063fc35aba6d361139f830aa91c45dc6b77942f082666876c1aa0be0f  elfio.tar.gz" | sha256sum --check --quiet
           mkdir -p elfio/build && tar -xf elfio.tar.gz -C elfio --strip-components=1
-          cd elfio/build && cmake                             \
-            -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/prefix \
-            -DELFIO_BUILD_EXAMPLES=OFF                        \
-            -DELFIO_BUILD_TESTS=OFF                           \
+          cd elfio/build && cmake                                  \
+            -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/deps/prefix \
+            -DELFIO_BUILD_EXAMPLES=OFF                             \
+            -DELFIO_BUILD_TESTS=OFF                                \
             .. && make install -j
         )
 
@@ -76,9 +82,9 @@ jobs:
           curl -Lfso termcolor.tar.gz https://github.com/ikalnytskyi/termcolor/archive/refs/tags/v2.0.0.tar.gz
           echo "4a73a77053822ca1ed6d4a2af416d31028ec992fb0ffa794af95bd6216bb6a20  termcolor.tar.gz" | sha256sum --check --quiet
           mkdir -p termcolor/build && tar -xf termcolor.tar.gz -C termcolor --strip-components=1
-          cd termcolor/build && cmake                         \
-            -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/prefix \
-            -DTERMCOLOR_TESTS=OFF                             \
+          cd termcolor/build && cmake                              \
+            -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/deps/prefix \
+            -DTERMCOLOR_TESTS=OFF                                  \
             .. && make install -j
         )
 
@@ -87,15 +93,17 @@ jobs:
         CC: ${{ matrix.compiler.CC }}
         CXX: ${{ matrix.compiler.CXX }}
       run: |
+        export PATH="${GITHUB_WORKSPACE}/deps/prefix/bin:$PATH"
         mkdir build && cd build
-        cmake -G "${{ matrix.build_generator }}"         \
-          -DLIBTREE_BUILD_TESTS=ON                       \
-          -DCMAKE_VERBOSE_MAKEFILE=ON                    \
-          -DCMAKE_PREFIX_PATH=${GITHUB_WORKSPACE}/prefix \
+        cmake -G "${{ matrix.build_generator }}"              \
+          -DLIBTREE_BUILD_TESTS=ON                            \
+          -DCMAKE_VERBOSE_MAKEFILE=ON                         \
+          -DCMAKE_PREFIX_PATH=${GITHUB_WORKSPACE}/deps/prefix \
           ..
         cmake --build . -j$(nproc)
 
     - name: Test
       run: |
+        export PATH="${GITHUB_WORKSPACE}/deps/prefix/bin:$PATH"
         cd build
         ctest --output-on-failure
