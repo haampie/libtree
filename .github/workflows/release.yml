@@ -33,19 +33,21 @@ jobs:
         curl -Lfs https://gist.githubusercontent.com/haampie/d6a28368579f7e38820a468dc1450697/raw/69579c61d6ca2ad4672f9b44356eaa5115b73650/libtree.diff | git apply
 
     - name: Install dependencies
+      env:
+        SPACK_COLOR: always
+        SPACK_OPTIMIZATION_FLAGS: "-Os"
       run: |
         export PATH="$PWD/spack/bin:$PATH"
-        export SPACK_OPTIMIZATION_FLAGS="-Os"
-
         spack -e ./ci external find --not-buildable cmake
         spack -e ./ci concretize
         spack -e ./ci install --only=dependencies --show-log-on-error
 
     - name: Install libtree
+      env:
+        SPACK_COLOR: always
+        SPACK_OPTIMIZATION_FLAGS: "-Os"
       run: |
         export PATH="$PWD/spack/bin:$PATH"
-        export SPACK_OPTIMIZATION_FLAGS="-Os"
-
         spack -e ./ci install -v
 
     - name: Bundle libtree with strip and chrpath
