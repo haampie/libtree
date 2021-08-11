@@ -1,37 +1,64 @@
-name: Build
+name: Static binaries
 
-on: 
-  push:
-    tags:
-      - v*
+on: push
 
 jobs:
   build-ubuntu:
-
     runs-on: ubuntu-18.04
+    container: alpine:3.13
     
     steps:
     - uses: actions/checkout@v2
-      with:
-        submodules: recursive
 
     - name: Install tools
-      run: sudo apt-get update -qq && sudo apt-get install -qq g++-8 chrpath binutils
+      run: apk add gcc g++ cmake python3 curl make file patch git tar gzip unzip bzip2 xz zstd bash
 
-    - name: Build
+    - name: Install Spack
       run: |
-          mkdir build 
-          cd build 
-          CXX=g++-8 cmake -DCMAKE_BUILD_TYPE="Release" -DCMAKE_CXX_FLAGS="-Wall -Wextra" -DCMAKE_CXX_FLAGS_RELEASE="-O2" .. 
-          make -j$(nproc)
+        curl -Lfso spack.tar.gz https://github.com/spack/spack/archive/refs/heads/develop.tar.gz
+        mkdir spack
+        tar -xf spack.tar.gz --strip-components=1 -C spack
+        cd spack
 
-    - name: Bundle
+        # Static binutils
+        curl -Lfs https://gist.githubusercontent.com/haampie/d6a28368579f7e38820a468dc1450697/raw/fed55a40a10ee4cda20b4a46c9f1c890b13fe723/binutils.diff | git apply
+
+        # Allow overriding optimization flags
+        curl -Lfs https://gist.githubusercontent.com/haampie/d6a28368579f7e38820a468dc1450697/raw/59164d52a2fcb5d698b8dcfe7cdc5c9675061c71/hack-wrapper.diff | git apply
+
+        # Static libiconv
+        curl -Lfs https://gist.githubusercontent.com/haampie/d6a28368579f7e38820a468dc1450697/raw/fdf263611b2adb2004c6318533bb5e8382022f98/libiconv.diff | git apply
+
+        # Disable rpath, probably a bug in cmake...
+        curl -Lfs https://gist.githubusercontent.com/haampie/d6a28368579f7e38820a468dc1450697/raw/69579c61d6ca2ad4672f9b44356eaa5115b73650/libtree.diff | git apply
+
+    - name: Install dependencies
       run: |
-        ./build/libtree ./build/libtree $(which chrpath) $(which strip) -d libtree --chrpath --strip
-        cp src/libtree libtree/libtree
-        tar -zcvf libtree_x86_64.tar.gz libtree
+        export PATH="$PWD/spack/bin:$PATH"
+        export SPACK_OPTIMIZATION_FLAGS="-Os"
 
-    - name: Create Release
+        spack -e ./ci external find --not-buildable cmake
+        spack -e ./ci concretize
+        spack -e ./ci install --only=dependencies --show-log-on-error
+
+    - name: Install libtree
+      run: |
+        export PATH="$PWD/spack/bin:$PATH"
+        export SPACK_OPTIMIZATION_FLAGS="-Os"
+
+        spack -e ./ci install -v
+
+    - name: Bundle libtree with strip and chrpath
+      run: |
+        mkdir -p bundle
+        cp -L ci/view/bin/libtree ci/view/bin/strip ci/view/bin/chrpath bundle/
+        tar -zcvf libtree_x86_64.tar.gz -C bundle .
+
+    - name: Copy libtree
+      run: cp -L ci/view/bin/libtree libtree_x86_64
+
+    - name: Create release
+      if: startsWith(github.ref, 'refs/tags/')
       id: create_release
       uses: actions/create-release@v1
       env:
@@ -42,29 +69,19 @@ jobs:
         draft: false
         prerelease: false
 
-    # Upload the binaries + source with dependencies as well
-    - uses: actions/checkout@v2
-      with:
-        submodules: recursive
-        path: sources/libtree
-
-    - name: Create source tarball
-      run: |
-        rm -rf sources/libtree/.git
-        rm -rf sources/libtree/deps/ELFIO/{elf_examples,examples,doc}
-        tar -C sources -zcvf sources.tar.gz libtree
-
-    - name: Upload sources
+    - name: Upload single binary
+      if: startsWith(github.ref, 'refs/tags/')
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./sources.tar.gz
-        asset_name: sources.tar.gz
+        asset_path: ./libtree_x86_64
+        asset_name: libtree_x86_64
         asset_content_type: application/gzip
 
-    - name: Upload binaries
+    - name: Upload tarball
+      if: startsWith(github.ref, 'refs/tags/')
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -73,5 +90,3 @@ jobs:
         asset_path: ./libtree_x86_64.tar.gz
         asset_name: libtree_x86_64.tar.gz
         asset_content_type: application/gzip
-
-           

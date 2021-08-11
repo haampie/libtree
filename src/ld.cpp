@@ -1,8 +1,8 @@
 #include <libtree/ld.hpp>
+#include <libtree/glob.hpp>
 
 #include <regex>
 #include <fstream>
-#include <cppglob/glob.hpp>
 
 std::string_view trim_ld_line(std::string_view line) {
     // Left trim
@@ -26,29 +26,37 @@ std::string_view trim_ld_line(std::string_view line) {
     return line;
 }
 
+#include <iostream>
+
 void parse_ld_conf(fs::path conf, std::vector<fs::path> &directories) {
 
     // Regex that matches include
-    std::regex include(R"(^include\s+(.+?)$)");
     std::string line;
     std::ifstream conf_file{conf};
-    std::smatch include_match;
 
     while (std::getline(conf_file, line)) {
-        // There's no string_view support for regex...
-        line = trim_ld_line(line);
+        // Remove whitespace indent and comments.
+        std::string_view stripped = trim_ld_line(line);
 
-        std::regex_match(line, include_match, include);
+        if (stripped.size() == 0) {
+            // Skip empty lines
+            continue;
+        } else if (stripped.rfind("include", 0) == 0 && std::isblank(stripped[7])) {
+            // If it starts with `include<blank>`, then strip that off, and
+            // remove blanks again.
+            stripped.remove_prefix(8);
+            stripped = trim_ld_line(stripped);
 
-        // Is this an include?
-        if (include_match.size() == 2) {
-            fs::path match = include_match[1].str();
-            std::vector<fs::path> includes = cppglob::glob(match, true);
+            // absolutify the include path.
+            auto include_path = conf.parent_path() / fs::path{stripped};
+            std::vector<fs::path> includes = glob_wrapper(include_path);
 
+            // Recursively parse the globbed includes
             for (auto const &file : includes)
                 parse_ld_conf(file, directories);
-        } else if (line.size() > 0) {
-            directories.push_back(line);
+        } else {
+            // Otherwise assume this guy is a directory.
+            directories.push_back(stripped);
         }
     }
 }

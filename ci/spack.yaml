@@ -1,0 +1,32 @@
+spack:
+  specs:
+  - libtree@master +chrpath +strip target=x86_64 ^binutils~nls~plugins libs=static
+    ^libiconv libs=static ^zlib~shared
+  view: ./view
+  develop:
+    libtree:
+      path: ..
+      spec: libtree@master
+  compilers:
+  - compiler:
+      spec: gcc@10.2.1
+      paths:
+        cc: /usr/bin/gcc
+        cxx: /usr/bin/g++
+        f77: null
+        fc: null
+      flags:
+        cflags: -static -s -no-pie -fPIC -ffunction-sections -fdata-sections -Wl,--gc-sections
+        cxxflags: -static -s -no-pie -fPIC -ffunction-sections -fdata-sections -Wl,--gc-sections
+        ldflags: -Wl,--gc-sections
+      operating_system: alpine3
+      target: x86_64
+      modules: []
+      environment: {}
+      extra_rpaths: []
+  packages:
+    cmake:
+      externals:
+      - spec: cmake@3.18.4
+        prefix: /usr
+      buildable: false

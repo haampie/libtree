@@ -1,27 +1,21 @@
-# Add tests
-add_executable(unit src/test.cpp)
+# Use CMake 3.20's GTest::gtest target.
+cmake_minimum_required(VERSION 3.20)
 
-if(USE_SYSTEM_DEPS)
-    include(FindPkgConfig)
+# Test dependencies
+find_package(GTest REQUIRED)
+find_program(BASH_PROGRAM bash REQUIRED)
 
-    # Find system gtest
-    pkg_check_modules(GTEST_MAIN REQUIRED gtest_main)
+add_executable(deps src/deps.cpp)
+target_link_libraries(deps libtree_lib GTest::gtest_main)
+set_property(TARGET deps PROPERTY CXX_STANDARD 17)
+add_test(NAME deps COMMAND deps)
 
-    target_link_libraries(unit libtree_lib ${GTEST_MAIN_LIBRARIES})
-    target_compile_options(unit PRIVATE ${GTEST_MAIN_CFLAGS_OTHER})
-else()
-    # Add test dependencies
-    add_subdirectory(deps)
+add_executable(ld_so_conf src/ld_so_conf.cpp)
+target_link_libraries(ld_so_conf libtree_lib GTest::gtest)
+set_property(TARGET ld_so_conf PROPERTY CXX_STANDARD 17)
+add_test(NAME ld_so_conf COMMAND ld_so_conf ${CMAKE_CURRENT_SOURCE_DIR}/ld_so_conf/ld.so.conf)
 
-    target_link_libraries(unit libtree_lib gtest_main)
-endif()
-
-add_test(NAME unit COMMAND unit)
-set_property(TARGET unit PROPERTY CXX_STANDARD 17)
-
-# Integration test
-find_program(BASH_PROGRAM bash)
-
+# Integration tests
 add_subdirectory(integration)
 
 if(BASH_PROGRAM)
