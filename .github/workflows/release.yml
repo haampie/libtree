@@ -40,7 +40,7 @@ jobs:
         spack -e ./ci external find --not-buildable cmake
         spack -e ./ci concretize
         spack -e ./ci install --only=dependencies --show-log-on-error
-    
+
     - name: Install libtree
       run: |
         export PATH="$PWD/spack/bin:$PATH"
@@ -48,25 +48,47 @@ jobs:
 
         spack -e ./ci install -v
 
-    # - name: Create Release
-    #   id: create_release
-    #   uses: actions/create-release@v1
-    #   env:
-    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    #   with:
-    #     tag_name: ${{ github.ref }}
-    #     release_name: Release ${{ github.ref }}
-    #     draft: false
-    #     prerelease: false
+    - name: Bundle libtree with strip and chrpath
+      run: |
+        mkdir -p bundle
+        cp -L ci/view/bin/libtree ci/view/bin/strip ci/view/bin/chrpath bundle/
+        tar -zcvf libtree_x86_64.tar.gz -C bundle .
 
-    # - name: Upload binaries
-    #   uses: actions/upload-release-asset@v1
-    #   env:
-    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    #   with:
-    #     upload_url: ${{ steps.create_release.outputs.upload_url }}
-    #     asset_path: ./libtree_x86_64.tar.gz
-    #     asset_name: libtree_x86_64.tar.gz
-    #     asset_content_type: application/gzip
+    - name: Copy libtree
+      run: cp -L ci/view/bin/libtree libtree_x86_64
+
+    - name: Create release
+      if: startsWith(github.ref, 'refs/tags/')
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+
+    - name: Upload single binary
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./libtree_x86_64
+        asset_name: libtree_x86_64
+        asset_content_type: application/gzip
+
+    - name: Upload tarball
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./libtree_x86_64.tar.gz
+        asset_name: libtree_x86_64.tar.gz
+        asset_content_type: application/gzip
 
            
