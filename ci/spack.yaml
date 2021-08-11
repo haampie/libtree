@@ -2,7 +2,7 @@ spack:
   specs:
   - libtree@master +chrpath +strip target=x86_64 ^binutils~nls~plugins libs=static
     ^libiconv libs=static ^zlib~shared
-  view: /root/libtree/ci/view
+  view: ./view
   develop:
     libtree:
       path: ..
