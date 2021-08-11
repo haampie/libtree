@@ -11,12 +11,23 @@ A tool that:
 ![example](doc/screenshot.png)
 
 ## Installation
-Download the [**latest release**](https://github.com/haampie/libtree/releases) from Github:
+Download the [**latest release**](https://github.com/haampie/libtree/releases) from Github.
+
+**Static executable**
 
 ```bash
-wget https://github.com/haampie/libtree/releases/download/v1.2.3/libtree_x86_64.tar.gz
-tar -xzf libtree_x86_64.tar.gz
-ln -s $(realpath ./libtree/libtree) /usr/local/bin/libtree
+wget -qO libtree https://github.com/haampie/libtree/releases/download/v2.0.0/libtree_x86_64
+chmod +x libtree
+./libtree $(which man)
+```
+
+**Static executable + optional dependencies**
+
+```bash
+wget -qO libtree.tar.gz https://github.com/haampie/libtree/releases/download/v2.0.0/libtree_x86_64.tar.gz
+mkdir libtree
+tar -xf libtree.tar.gz -C libtree
+export PATH="$PWD/libtree:$PATH"
 libtree $(which man)
 ```
 
@@ -89,7 +100,7 @@ path config by setting `--ldconf mylibs.conf`. Search paths can be added as well
   ```
 - **Using [spack](https://github.com/spack/spack)**:
   ```
-  spack install libtree
+  spack install libtree +chrpath +strip
   spack load libtree
   ```
 
