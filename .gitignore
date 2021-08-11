@@ -9,4 +9,4 @@ spack-*
 spack.lock
 .spack-env
 ._view
-view/
+ci/view
