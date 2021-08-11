@@ -1,4 +1,4 @@
-name: Build
+name: Static binaries
 
 on: push
 
