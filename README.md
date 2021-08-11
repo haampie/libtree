@@ -90,12 +90,12 @@ path config by setting `--ldconf mylibs.conf`. Search paths can be added as well
 ## Building
 - **From source**:
   ```bash
-  git clone --recursive https://github.com/haampie/libtree.git
+  git clone https://github.com/haampie/libtree.git
   cd libtree
   mkdir build
   cd build
-  cmake -DCMAKE_BUILD_TYPE=Release ..
-  make
+  cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="/path/to/cxxopts;/path/to/elfio;/path/to/termcolor" ..
+  make -j
   make install
   ```
 - **Using [spack](https://github.com/spack/spack)**:
