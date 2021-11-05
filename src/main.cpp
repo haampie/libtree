@@ -66,11 +66,11 @@ int main(int argc, char ** argv) {
 
     if (result["binary"].count()) {
         for (auto const &binary : result["binary"].as<std::vector<std::string>>()) {
-            if (!fs::exists(binary))
-                continue;
+            auto full = fs::canonical(fs::path(binary).is_relative() ? fs::current_path() / binary
+                                                                     : fs::path(root) / fs::path(binary).relative_path());
 
-            auto type = is_lib(fs::canonical(binary)) ? deploy_t::LIBRARY : deploy_t::EXECUTABLE;
-            auto val = from_path(type, found_t::NONE, binary, platform);
+            auto type = is_lib(full) ? deploy_t::LIBRARY : deploy_t::EXECUTABLE;
+            auto val = from_path(type, found_t::NONE, full.string(), platform);
             if (val != std::nullopt)
                 pool.push_back(*val);
         }
