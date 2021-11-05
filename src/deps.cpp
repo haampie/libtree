@@ -28,6 +28,7 @@ deps::deps(
     std::vector<fs::path> &&ld_library_paths,
     std::unordered_set<std::string> &&skip,
     std::string const &platform,
+    std::string const &root,
     deps::verbosity_t verbose,
     bool print_paths) 
     : m_top_level(std::move(input)), 
@@ -35,6 +36,7 @@ deps::deps(
       m_ld_so_conf(std::move(ld_so_conf)),
       m_skip(std::move(skip)),
       m_platform(std::move(platform)),
+      m_root(std::move(root)),
       m_verbosity(verbose),
       m_print_paths(print_paths)
 {

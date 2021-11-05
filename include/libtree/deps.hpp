@@ -23,6 +23,7 @@ public:
         std::vector<fs::path> &&ld_library_paths,
         std::unordered_set<std::string> &&skip,
         std::string const &platform,
+        std::string const &root,
         verbosity_t verbose,
         bool print_paths
     );
@@ -53,6 +54,7 @@ private:
     std::vector<Elf> m_all_binaries;
 
     std::string m_platform;
+    std::string m_root;
     verbosity_t m_verbosity;
     bool m_print_paths;
 };

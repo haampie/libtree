@@ -38,6 +38,7 @@ int main(int argc, char ** argv) {
       ("l,ldconf", "Path to custom ld.conf to test settings", cxxopts::value<std::string>()->default_value("/etc/ld.so.conf"))
       ("s,skip", "Skip library and its dependencies from being deployed or inspected", cxxopts::value<std::vector<std::string>>())
       ("platform", "Platform used for interpolation in rpaths", cxxopts::value<std::string>()->default_value(default_platform))
+      ("R,root", "Use this ROOT filesystem tree", cxxopts::value<std::string>()->default_value("/"))
       ("b,binary", "Binary to inspect", cxxopts::value<std::vector<std::string>>());
 
     options.add_options("B. Copying libs")
@@ -59,6 +60,7 @@ int main(int argc, char ** argv) {
     }
 
     auto platform = result["platform"].as<std::string>();
+    auto root = fs::canonical(result["root"].as<std::string>()).string();
 
     std::vector<Elf> pool;
 
@@ -107,6 +109,7 @@ int main(int argc, char ** argv) {
         std::move(ld_library_paths),
         std::move(generatedExcludelist),
         platform,
+        root,
         verbosity,
         print_paths
     };
