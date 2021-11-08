@@ -220,26 +220,22 @@ std::optional<Elf> deps::locate_by_search(Elf const &parent, fs::path const &so,
 }
 
 std::optional<Elf> deps::locate_directly(Elf const &parent, fs::path const &so) {
-    auto full_path = so; 
+    auto full = (so.is_relative() ? parent.abs_path.parent_path() / so
+                                  : fs::path(m_root) / so.relative_path()).lexically_normal();
 
-    if (so.is_relative()) {
-        auto cwd = parent.abs_path;
-        cwd.remove_filename();
-        full_path = cwd / so;
-    }
-
-    return fs::exists(full_path) ? from_path(deploy_t::LIBRARY, found_t::DIRECT, full_path.string(), m_platform, parent.elf_type)
-                                 : std::nullopt;
+    return fs::exists(full) ? from_path(deploy_t::LIBRARY, found_t::DIRECT, full.string(), m_platform, m_root, parent.elf_type)
+                            : std::nullopt;
 }
 
 std::optional<Elf> deps::find_by_paths(Elf const &parent, fs::path const &so, std::vector<fs::path> const &paths, found_t tag) {
     for (auto const &path : paths) {
-        auto full = path / so;
+        auto full = (path.is_relative() ? parent.abs_path.parent_path() / path / so
+                                        : fs::path(m_root) / path.relative_path() / so).lexically_normal();
 
         if (!fs::exists(full))
             continue;
 
-        auto result = from_path(deploy_t::LIBRARY, tag, full.string(), m_platform, parent.elf_type);
+        auto result = from_path(deploy_t::LIBRARY, tag, full.string(), m_platform, m_root, parent.elf_type);
 
         if (result) return result;
     }

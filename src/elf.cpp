@@ -62,19 +62,19 @@ std::vector<fs::path> split_paths(std::string_view raw_path) {
     return rpaths;
 }
 
-std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path path_str, std::string const &platform, std::optional<elf_type_t> required_type) {
+std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path abs_path, std::string const &platform, std::string const &root, std::optional<elf_type_t> required_type) {
     // Extract some data from the elf file.
     std::vector<fs::path> needed, rpaths, runpaths;
 
     // Make sure the path is absolute for substitutions
-    auto cwd = fs::absolute(path_str).remove_filename();
+    auto cwd = fs::path("/") / abs_path.parent_path().lexically_relative(root);
 
     // use the filename, or the soname if it exists to uniquely identify a shared lib
-    std::string name =  path_str.filename();
+    std::string name = abs_path.filename();
 
     // Try to load the ELF file
     ELFIO::elfio elf;
-    if (!elf.load(path_str.string()))
+    if (!elf.load(abs_path.string()))
         return std::nullopt;
 
     auto elf_type = elf.get_class() == ELFCLASS64 ? elf_type_t::ELF_64 
@@ -120,5 +120,5 @@ std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path path_str
         }
     }
 
-    return Elf{type, found_via, elf_type, name, path_str, runpaths, rpaths, needed};
+    return Elf{type, found_via, elf_type, name, abs_path, runpaths, rpaths, needed};
 }

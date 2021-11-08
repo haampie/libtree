@@ -70,7 +70,7 @@ int main(int argc, char ** argv) {
                                                                      : fs::path(root) / fs::path(binary).relative_path());
 
             auto type = is_lib(full) ? deploy_t::LIBRARY : deploy_t::EXECUTABLE;
-            auto val = from_path(type, found_t::NONE, full.string(), platform);
+            auto val = from_path(type, found_t::NONE, full.string(), platform, root);
             if (val != std::nullopt)
                 pool.push_back(*val);
         }
