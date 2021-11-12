@@ -18,12 +18,12 @@ public:
     enum class verbosity_t {NONE, VERBOSE, VERY_VERBOSE};
 
     deps(
+        fs::path const &root,
         std::vector<Elf> &&input,
         std::vector<fs::path> &&ld_so_conf,
         std::vector<fs::path> &&ld_library_paths,
         std::unordered_set<std::string> &&skip,
         std::string const &platform,
-        std::string const &root,
         verbosity_t verbose,
         bool print_paths
     );
@@ -44,6 +44,7 @@ private:
     std::optional<Elf> find_by_paths(Elf const &parent, fs::path const &so, std::vector<fs::path> const &paths, found_t tag);
 
     size_t m_depth = 0;
+    fs::path m_root;
     std::vector<Elf> m_top_level;
     std::vector<fs::path> m_ld_library_paths;
     std::vector<fs::path> m_ld_so_conf;
@@ -54,7 +55,6 @@ private:
     std::vector<Elf> m_all_binaries;
 
     std::string m_platform;
-    std::string m_root;
     verbosity_t m_verbosity;
     bool m_print_paths;
 };

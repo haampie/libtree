@@ -19,10 +19,10 @@ struct Elf {
     found_t found_via;
     elf_type_t elf_type;
     std::string name;
-    fs::path abs_path;
-    std::vector<fs::path> runpaths;
-    std::vector<fs::path> rpaths;
-    std::vector<fs::path> needed;
+    fs::path abs_path;              // absolute path from <root>
+    std::vector<fs::path> runpaths; // list of absolute lexically normal paths
+    std::vector<fs::path> rpaths;   // list of absolute lexically normal paths
+    std::vector<fs::path> needed;   // list of lexically normal paths
 };
 
 std::ostream &operator<<(std::ostream &os, Elf const &elf);
@@ -40,4 +40,6 @@ fs::path apply_substitutions(fs::path const &rpath, fs::path const &cwd, std::st
 std::vector<fs::path> split_paths(std::string_view raw_path);
 
 // Try to create an elf from a path
-std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path abs_path, std::string const &platform, std::string const &root, std::optional<elf_type_t> required_type = std::nullopt);
+std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path const &root, fs::path abs_path, std::string const &platform, std::optional<elf_type_t> required_type = std::nullopt);
+
+void remove_relative_and_lexically_normalize(std::vector<fs::path> &paths);

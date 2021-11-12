@@ -6,6 +6,18 @@
 
 #include <regex>
 
+void remove_relative_and_lexically_normalize(std::vector<fs::path> &paths) {
+    // Remove anything that is relative -- we require absolute search paths.
+    paths.erase(std::remove_if(paths.begin(), paths.end(), [](fs::path const &x){
+        return x.is_relative();
+    }), paths.end());
+
+    // Make sure that we don't go beyond the filesystem root. (/../.. is an absolute
+    // path, that would be normalized to / through this.) 
+    for (auto &p : paths)
+        p = p.lexically_normal();
+}
+
 static const std::regex s_origin{"\\$(ORIGIN|\\{ORIGIN\\})"};
 static const std::regex s_lib{"\\$(LIB|\\{LIB\\})"};
 static const std::regex s_platform{"\\$(PLATFORM|\\{PLATFORM\\})"};
@@ -62,19 +74,20 @@ std::vector<fs::path> split_paths(std::string_view raw_path) {
     return rpaths;
 }
 
-std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path abs_path, std::string const &platform, std::string const &root, std::optional<elf_type_t> required_type) {
+std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path const &root, fs::path abs_path, std::string const &platform, std::optional<elf_type_t> required_type) {
     // Extract some data from the elf file.
     std::vector<fs::path> needed, rpaths, runpaths;
 
     // Make sure the path is absolute for substitutions
-    auto cwd = fs::path("/") / abs_path.parent_path().lexically_relative(root);
+    auto cwd = abs_path.parent_path();
 
     // use the filename, or the soname if it exists to uniquely identify a shared lib
     std::string name = abs_path.filename();
 
     // Try to load the ELF file
+    auto actual_path = root / abs_path.relative_path();
     ELFIO::elfio elf;
-    if (!elf.load(abs_path.string()))
+    if (!elf.load(actual_path.string()))
         return std::nullopt;
 
     auto elf_type = elf.get_class() == ELFCLASS64 ? elf_type_t::ELF_64 
@@ -105,7 +118,7 @@ std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path abs_path
             dynamic.get_entry(i, tag, value, str);
 
             if (tag == DT_NEEDED) {
-                needed.push_back(str);
+                needed.push_back(fs::path(str).lexically_normal());
             } else if (tag == DT_RUNPATH) {
                 for (auto const &path : split_paths(str))
                     runpaths.push_back(apply_substitutions(path, cwd, elf_type, platform));
@@ -119,6 +132,9 @@ std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path abs_path
             }
         }
     }
+
+    remove_relative_and_lexically_normalize(runpaths);
+    remove_relative_and_lexically_normalize(rpaths);
 
     return Elf{type, found_via, elf_type, name, abs_path, runpaths, rpaths, needed};
 }

@@ -38,7 +38,7 @@ int main(int argc, char ** argv) {
       ("l,ldconf", "Path to custom ld.conf to test settings", cxxopts::value<std::string>()->default_value("/etc/ld.so.conf"))
       ("s,skip", "Skip library and its dependencies from being deployed or inspected", cxxopts::value<std::vector<std::string>>())
       ("platform", "Platform used for interpolation in rpaths", cxxopts::value<std::string>()->default_value(default_platform))
-      ("R,root", "Use this ROOT filesystem tree", cxxopts::value<std::string>()->default_value("/"))
+      ("r,root", "Use this ROOT filesystem tree", cxxopts::value<std::string>()->default_value("/"))
       ("b,binary", "Binary to inspect", cxxopts::value<std::vector<std::string>>());
 
     options.add_options("B. Copying libs")
@@ -60,17 +60,27 @@ int main(int argc, char ** argv) {
     }
 
     auto platform = result["platform"].as<std::string>();
-    auto root = fs::canonical(result["root"].as<std::string>()).string();
+    auto root = fs::canonical(result["root"].as<std::string>());
 
     std::vector<Elf> pool;
 
     if (result["binary"].count()) {
         for (auto const &binary : result["binary"].as<std::vector<std::string>>()) {
-            auto full = fs::canonical(fs::path(binary).is_relative() ? fs::current_path() / binary
-                                                                     : fs::path(root) / fs::path(binary).relative_path());
+            auto binary_path = fs::path(binary);
 
-            auto type = is_lib(full) ? deploy_t::LIBRARY : deploy_t::EXECUTABLE;
-            auto val = from_path(type, found_t::NONE, full.string(), platform, root);
+            // If we have a relative path and custom root, what should we do?
+            // For now error.
+            if (binary_path.is_relative() && root != fs::path{"/"})
+                throw std::runtime_error("When using a custom root, provide absolute paths to binaries.");
+            
+            // Otherwise make absolute.
+            auto abs_path = fs::absolute(binary_path);
+
+            // Notice: is_lib doesn't use ELF file type checks, cause PIE executables
+            // are often shown as shared objects -- so we make an educated guess based
+            // on the filename: libxyz.so is a lib... 
+            auto type = is_lib(abs_path) ? deploy_t::LIBRARY : deploy_t::EXECUTABLE;
+            auto val = from_path(type, found_t::NONE, root, abs_path, platform);
             if (val != std::nullopt)
                 pool.push_back(*val);
         }
@@ -95,7 +105,7 @@ int main(int argc, char ** argv) {
             ld_library_paths.push_back(path);
 
     // Default search paths is ldconfig + /lib + /usr/lib
-    auto ld_conf = parse_ld_conf(result["ldconf"].as<std::string>());
+    auto ld_conf = parse_ld_conf(root, result["ldconf"].as<std::string>());
 
     // Walk the dependency tree
     bool print_paths = result.count("path") > 0;
@@ -104,12 +114,12 @@ int main(int argc, char ** argv) {
                                                                          : deps::verbosity_t::NONE;
 
     deps tree{
+        root,
         std::move(pool),
         std::move(ld_conf),
         std::move(ld_library_paths),
         std::move(generatedExcludelist),
         platform,
-        root,
         verbosity,
         print_paths
     };
@@ -127,6 +137,6 @@ int main(int argc, char ** argv) {
         fs::create_directories(bin_dir);
         fs::create_directories(lib_dir);
 
-        deploy(tree.get_deps(), bin_dir, lib_dir, chrpath, strip, result["chrpath"].as<bool>(), result["strip"].as<bool>());
+        deploy(root, tree.get_deps(), bin_dir, lib_dir, chrpath, strip, result["chrpath"].as<bool>(), result["strip"].as<bool>());
     }
 }
