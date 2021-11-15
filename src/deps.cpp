@@ -133,10 +133,12 @@ void deps::explore(Elf const &parent, std::vector<fs::path> &rpaths, std::vector
         if (m_verbosity == verbosity_t::NONE && result && m_skip.count(result->name) > 0)
             continue;
 
-        if (result)
+        if (result) {
             children.push_back(*result);
-        else
+        } else {
             children.push_back(lib);
+            m_success = false;
+        }
     }
 
     // Recurse deeper

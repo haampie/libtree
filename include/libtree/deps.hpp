@@ -30,6 +30,8 @@ public:
 
     std::vector<Elf> const &get_deps() const;
 
+    inline bool success() const { return m_success; }
+
 private:
     void explore(Elf const &elf, std::vector<fs::path> &rpaths, std::vector<bool> &done);
     void explore(Elf const &elf, std::vector<fs::path> &rpaths);
@@ -57,4 +59,5 @@ private:
     std::string m_platform;
     verbosity_t m_verbosity;
     bool m_print_paths;
+    bool m_success = true;
 };

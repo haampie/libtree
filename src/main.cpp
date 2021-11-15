@@ -139,4 +139,6 @@ int main(int argc, char ** argv) {
 
         deploy(root, tree.get_deps(), bin_dir, lib_dir, chrpath, strip, result["chrpath"].as<bool>(), result["strip"].as<bool>());
     }
+
+    return !tree.success();
 }
