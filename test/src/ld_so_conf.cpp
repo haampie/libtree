@@ -6,7 +6,7 @@ std::string path;
 
 TEST(example, add)
 {    
-    auto paths = parse_ld_conf(path);
+    auto paths = parse_ld_conf("/", path);
     std::sort(paths.begin(), paths.end());
 
     ASSERT_EQ(paths.size(), 5);

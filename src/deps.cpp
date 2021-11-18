@@ -23,6 +23,7 @@ bool is_lib(fs::path const &p) {
 }
 
 deps::deps(
+    fs::path const &root,
     std::vector<Elf> &&input, 
     std::vector<fs::path> &&ld_so_conf, 
     std::vector<fs::path> &&ld_library_paths,
@@ -30,7 +31,8 @@ deps::deps(
     std::string const &platform,
     deps::verbosity_t verbose,
     bool print_paths) 
-    : m_top_level(std::move(input)), 
+    : m_root(std::move(root)),
+      m_top_level(std::move(input)), 
       m_ld_library_paths(std::move(ld_library_paths)),
       m_ld_so_conf(std::move(ld_so_conf)),
       m_skip(std::move(skip)),
@@ -38,7 +40,14 @@ deps::deps(
       m_verbosity(verbose),
       m_print_paths(print_paths)
 {
+    // Normalize paths, and remove relative ones.
+    remove_relative_and_lexically_normalize(m_ld_library_paths);
+    remove_relative_and_lexically_normalize(m_ld_so_conf);
+
     std::vector<fs::path> rpaths;
+    if (m_root != "/")
+        std::cout << termcolor::bright_grey << m_root.string() << termcolor::reset << '\n';
+
     for (auto const &elf : m_top_level)
         explore(elf, rpaths);
 }
@@ -85,7 +94,7 @@ void deps::explore(Elf const &parent, std::vector<fs::path> &rpaths, std::vector
     if (!excluded && !cached)
         std::cout << termcolor::bold;
 
-    std::cout << (m_print_paths && fs::exists(parent.abs_path) ? fs::canonical(parent.abs_path).string() : parent.name)
+    std::cout << (m_print_paths && fs::exists(m_root / parent.abs_path.relative_path()) ? parent.abs_path.string() : parent.name)
               << (excluded ? " (skipped)" : cached ? " (collapsed)" : "")
               << termcolor::reset;
 
@@ -124,10 +133,12 @@ void deps::explore(Elf const &parent, std::vector<fs::path> &rpaths, std::vector
         if (m_verbosity == verbosity_t::NONE && result && m_skip.count(result->name) > 0)
             continue;
 
-        if (result)
+        if (result) {
             children.push_back(*result);
-        else
+        } else {
             children.push_back(lib);
+            m_success = false;
+        }
     }
 
     // Recurse deeper
@@ -176,68 +187,92 @@ void deps::print_error(fs::path const &lib, std::vector<fs::path> const &rpaths,
     std::cout << '\n';
 }
 
-std::optional<Elf> deps::locate(Elf const &parent, fs::path const &so, std::vector<fs::path> const &rpaths) {
+std::optional<Elf> deps::locate(Elf const &parent, fs::path const &needed, std::vector<fs::path> const &rpaths) {
+    // Notice: `needed` is already lexically normalized.
+
     // Empty, not sure if that even can happen... but it's a no-go.
-    if (so.empty())
+    if (needed.empty())
         return std::nullopt;
 
     // A convoluted way to see if there is just _one_ component
-    else if (++so.begin() == so.end())
-        return locate_by_search(parent, so, rpaths);
+    else if (++needed.begin() == needed.end())
+        return locate_by_search(parent, needed, rpaths);
 
     else
-        return locate_directly(parent, so);
+        return locate_directly(parent, needed);
 }
 
-std::optional<Elf> deps::locate_by_search(Elf const &parent, fs::path const &so, std::vector<fs::path> const &rpaths) {
+std::optional<Elf> deps::locate_by_search(Elf const &parent, fs::path const &needed, std::vector<fs::path> const &rpaths) {
     std::optional<Elf> result{std::nullopt};
 
     // If there is no RUNPATH and >= 1 RPATH, use RPATH
     if (parent.runpaths.size() == 0 && rpaths.size() > 0) {
-        result = find_by_paths(parent, so, rpaths, found_t::RPATH);
+        result = find_by_paths(parent, needed, rpaths, found_t::RPATH);
         if (result) return result;
     }
 
     // Try LD_LIBRARY_PATH
-    result = find_by_paths(parent, so, m_ld_library_paths, found_t::LD_LIBRARY_PATH);
+    result = find_by_paths(parent, needed, m_ld_library_paths, found_t::LD_LIBRARY_PATH);
     if (result) return result;
 
     // Try RUNPATH
-    result = find_by_paths(parent, so, parent.runpaths, found_t::RUNPATH);
+    result = find_by_paths(parent, needed, parent.runpaths, found_t::RUNPATH);
     if (result) return result;
 
     // Try ld.so.conf
-    result = find_by_paths(parent, so, m_ld_so_conf, found_t::LD_SO_CONF);
+    result = find_by_paths(parent, needed, m_ld_so_conf, found_t::LD_SO_CONF);
     if (result) return result;
 
     // Try standard search paths
-    result = find_by_paths(parent, so, m_default_paths, found_t::DEFAULT_PATHS);
+    result = find_by_paths(parent, needed, m_default_paths, found_t::DEFAULT_PATHS);
     if (result) return result;
 
     return result;
 }
 
-std::optional<Elf> deps::locate_directly(Elf const &parent, fs::path const &so) {
-    auto full_path = so; 
+std::optional<Elf> deps::locate_directly(Elf const &parent, fs::path const &needed) {
+    // Note: relative DT_NEEDED is possible, it will be relative to the working
+    // directory of the current process, which ... seems very awkward and makes no
+    // sense when changing root. We skip those. If you care about this edge case,
+    // open an issue please. TODO: inform the user about this?
+    if (needed.is_relative())
+        return std::nullopt;
+    
+    // Guard against needed == /../../some_path through normalization.
+    auto abs_path = needed.lexically_normal().relative_path();
+    auto abs_host_to_lib = m_root / abs_path;
 
-    if (so.is_relative()) {
-        auto cwd = parent.abs_path;
-        cwd.remove_filename();
-        full_path = cwd / so;
-    }
+    // TODO: symlinks out of the root dir? 
+    if (!fs::exists(abs_host_to_lib))
+        return std::nullopt;
 
-    return fs::exists(full_path) ? from_path(deploy_t::LIBRARY, found_t::DIRECT, full_path.string(), m_platform, parent.elf_type)
-                                 : std::nullopt;
+    return from_path(
+        deploy_t::LIBRARY,
+        found_t::DIRECT,
+        m_root,
+        abs_path,
+        m_platform,
+        parent.elf_type);
 }
 
-std::optional<Elf> deps::find_by_paths(Elf const &parent, fs::path const &so, std::vector<fs::path> const &paths, found_t tag) {
+std::optional<Elf> deps::find_by_paths(Elf const &parent, fs::path const &needed, std::vector<fs::path> const &paths, found_t tag) {
     for (auto const &path : paths) {
-        auto full = path / so;
+        // Both path and needed are normalized
+        auto abs_root_to_lib = path / needed;
+        auto abs_host_to_lib = m_root / abs_root_to_lib.relative_path();
 
-        if (!fs::exists(full))
+        // TODO: symlinks pointing outside root.
+        if (!fs::exists(abs_host_to_lib))
             continue;
 
-        auto result = from_path(deploy_t::LIBRARY, tag, full.string(), m_platform, parent.elf_type);
+        auto result = from_path(
+            deploy_t::LIBRARY,
+            tag,
+            m_root,
+            abs_root_to_lib,
+            m_platform,
+            parent.elf_type
+        );
 
         if (result) return result;
     }

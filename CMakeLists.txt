@@ -25,6 +25,7 @@ set(SOURCES
    ${CMAKE_CURRENT_SOURCE_DIR}/src/ld.cpp
 )
 
+
 # Add the library
 add_library(libtree_lib OBJECT ${SOURCES})
 set_target_properties(libtree_lib PROPERTIES OUTPUT_NAME libtree)

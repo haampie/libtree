@@ -18,6 +18,7 @@ public:
     enum class verbosity_t {NONE, VERBOSE, VERY_VERBOSE};
 
     deps(
+        fs::path const &root,
         std::vector<Elf> &&input,
         std::vector<fs::path> &&ld_so_conf,
         std::vector<fs::path> &&ld_library_paths,
@@ -28,6 +29,8 @@ public:
     );
 
     std::vector<Elf> const &get_deps() const;
+
+    inline bool success() const { return m_success; }
 
 private:
     void explore(Elf const &elf, std::vector<fs::path> &rpaths, std::vector<bool> &done);
@@ -43,6 +46,7 @@ private:
     std::optional<Elf> find_by_paths(Elf const &parent, fs::path const &so, std::vector<fs::path> const &paths, found_t tag);
 
     size_t m_depth = 0;
+    fs::path m_root;
     std::vector<Elf> m_top_level;
     std::vector<fs::path> m_ld_library_paths;
     std::vector<fs::path> m_ld_so_conf;
@@ -55,4 +59,5 @@ private:
     std::string m_platform;
     verbosity_t m_verbosity;
     bool m_print_paths;
+    bool m_success = true;
 };

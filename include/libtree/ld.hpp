@@ -9,6 +9,6 @@ namespace fs = std::filesystem;
 
 std::string_view trim_ld_line(std::string_view line);
 
-void parse_ld_conf(fs::path conf, std::vector<fs::path> &directories);
+void parse_ld_conf(fs::path const &root, fs::path conf, std::vector<fs::path> &directories);
 
-std::vector<fs::path> parse_ld_conf(std::string_view path);
+std::vector<fs::path> parse_ld_conf(fs::path const &root, fs::path path);
