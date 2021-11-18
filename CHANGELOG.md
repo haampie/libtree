@@ -1,3 +1,6 @@
+# v2.1.0
+- New `--root path/to/rootfs` flag, which is useful when doing cross-compilation with a root filesystem for the target architecture.
+
 # v2.0.0
 
 - No changes to the libtree API
