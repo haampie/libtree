@@ -23,6 +23,11 @@ add_executable(one one.c)
 add_library(two SHARED two.c)
 add_library(three SHARED three.c)
 
+# Make sure not to link to libc
+target_link_options(one PRIVATE "-nostdlib")
+target_link_options(two PRIVATE "-nostdlib")
+target_link_options(three PRIVATE "-nostdlib")
+
 target_link_libraries(one PRIVATE two)
 target_link_libraries(two PRIVATE three)
 

@@ -1,2 +1,2 @@
 extern int two();
-int main() { return two(); }
+int _start() { return two(); }
