@@ -1,5 +1,5 @@
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -36,20 +36,19 @@ struct dynamic_64 {
     uint64_t d_val;
 };
 
-#define ET_EXEC    2
-#define ET_DYN     3
+#define ET_EXEC 2
+#define ET_DYN 3
 
-#define PT_NULL    0
-#define PT_LOAD    1
+#define PT_NULL 0
+#define PT_LOAD 1
 #define PT_DYNAMIC 2
 
-#define DT_NULL    0
-#define DT_NEEDED  1
-#define DT_STRTAB  5
-#define DT_SONAME  14
-#define DT_RPATH   15
+#define DT_NULL 0
+#define DT_NEEDED 1
+#define DT_STRTAB 5
+#define DT_SONAME 14
+#define DT_RPATH 15
 #define DT_RUNPATH 29
-
 
 #define ERR_INVALID_MAGIC 1
 #define ERR_INVALID_CLASS 1
@@ -57,14 +56,13 @@ struct dynamic_64 {
 #define ERR_UNSUPPORTED_ELF_FILE 1
 #define ERR_INVALID_HEADER 1
 
-typedef enum {INPUT, DIRECT, RPATH, RUNPATH, DEFAULT} found_by;
+typedef enum { INPUT, DIRECT, RPATH, RUNPATH, DEFAULT } found_by;
 
-char * default_paths = "/usr/lib/x86_64-linux-gnu/:/usr/lib/:/usr/lib64";
+char *default_paths = "/usr/lib/x86_64-linux-gnu/:/usr/lib/:/usr/lib64";
 
 // large buffer in which to copy rpaths, needed libraries and sonames.
-char * buf;
+char *buf;
 size_t buf_size;
-
 
 // rpath stack: if lib_a needs lib_b needs lib_c and all have rpaths
 // then first lib_c's rpaths are considered, then lib_b's, then lib_a's.
@@ -82,15 +80,19 @@ struct visited_file {
 struct visited_file visited_files[128];
 size_t visited_files_count;
 
-int recurse(char * current_file, int depth, found_by reason);
+int recurse(char *current_file, int depth, found_by reason);
 
-void check_search_paths(found_by reason, char *path, char *rpaths, size_t *needed_not_found, size_t needed_buf_offsets[32], int depth) {
+void check_search_paths(found_by reason, char *path, char *rpaths,
+                        size_t *needed_not_found, size_t needed_buf_offsets[32],
+                        int depth) {
     while (*rpaths != '\0') {
         // First remove trailing colons
-        for (; *rpaths == ':' && *rpaths != '\0'; ++rpaths);
+        for (; *rpaths == ':' && *rpaths != '\0'; ++rpaths)
+            ;
 
         // Check if it was only colons
-        if (*rpaths == '\0') return;
+        if (*rpaths == '\0')
+            return;
 
         // Copy the search path until the first \0 or :
         char *dest = path;
@@ -98,7 +100,8 @@ void check_search_paths(found_by reason, char *path, char *rpaths, size_t *neede
             *dest++ = *rpaths++;
 
         // Add a separator if necessary
-        if (*(dest-1) != '/') *dest++ = '/';
+        if (*(dest - 1) != '/')
+            *dest++ = '/';
 
         // Keep track of the end of the current search path.
         char *search_path_end = dest;
@@ -112,7 +115,8 @@ void check_search_paths(found_by reason, char *path, char *rpaths, size_t *neede
                 // Found it, so swap out the current soname to the back,
                 // and reduce the number of to be found by one.
                 size_t tmp = needed_buf_offsets[i];
-                needed_buf_offsets[i] = needed_buf_offsets[*needed_not_found-1];
+                needed_buf_offsets[i] =
+                    needed_buf_offsets[*needed_not_found - 1];
                 needed_buf_offsets[--(*needed_not_found)] = tmp;
             } else {
                 ++i;
@@ -121,9 +125,10 @@ void check_search_paths(found_by reason, char *path, char *rpaths, size_t *neede
     }
 }
 
-int recurse(char * current_file, int depth, found_by reason) {
-    FILE * fptr = fopen(current_file, "rb");
-    if (fptr == NULL) return 1;
+int recurse(char *current_file, int depth, found_by reason) {
+    FILE *fptr = fopen(current_file, "rb");
+    if (fptr == NULL)
+        return 1;
 
     // When we're done recursing, we should give back the memory we've claimed.
     size_t old_buf_size = buf_size;
@@ -172,8 +177,8 @@ int recurse(char * current_file, int depth, found_by reason) {
     uint64_t offsets[32];
     uint64_t addrs[32];
 
-    uint64_t * offsets_end = &offsets[0];
-    uint64_t * addrs_end = &addrs[0];
+    uint64_t *offsets_end = &offsets[0];
+    uint64_t *addrs_end = &addrs[0];
 
     for (int i = 0; i < 32; ++i) {
         offsets[i] = 0xffffffffffffffff;
@@ -201,7 +206,8 @@ int recurse(char * current_file, int depth, found_by reason) {
 
     int should_recurse = 1;
     for (size_t i = 0; i < visited_files_count; ++i) {
-        if (visited_files[i].st_dev == finfo.st_dev && visited_files[i].st_ino == finfo.st_ino) {
+        if (visited_files[i].st_dev == finfo.st_dev &&
+            visited_files[i].st_ino == finfo.st_ino) {
             should_recurse = 0;
             break;
         }
@@ -214,16 +220,25 @@ int recurse(char * current_file, int depth, found_by reason) {
     // No dynamic section? -- let's just assume that is OK for now.
     // we simply print the filename
     if (p_offset == 0xffffffffffffffff) {
-        for (int i = 0; i < depth; ++i) putchar(' ');
+        for (int i = 0; i < depth; ++i)
+            putchar(' ');
         if (should_recurse == 0)
             printf("\e[1;36m%s\e[0m", current_file);
         else
             printf("\e[1;34m%s\e[0m", current_file);
-        switch(reason) {
-        case RPATH: printf(" [rpath]"); break;
-        case RUNPATH: printf(" [runpath]"); break;
-        case DIRECT: printf(" [direct]"); break;
-        default: printf("\n"); break;
+        switch (reason) {
+        case RPATH:
+            printf(" [rpath]");
+            break;
+        case RUNPATH:
+            printf(" [runpath]");
+            break;
+        case DIRECT:
+            printf(" [direct]");
+            break;
+        default:
+            printf("\n");
+            break;
         }
         fclose(fptr);
         return 0;
@@ -280,8 +295,10 @@ int recurse(char * current_file, int depth, found_by reason) {
     // Assume we have a sentinel value.
     // iterate until the next one is larger.
     while (1) {
-        if (strtab >= *addr_i && strtab < *(addr_i+1)) break;
-        ++offset_i; ++addr_i;
+        if (strtab >= *addr_i && strtab < *(addr_i + 1))
+            break;
+        ++offset_i;
+        ++addr_i;
     }
 
     uint64_t strtab_offset = *offset_i - *addr_i + strtab;
@@ -303,17 +320,28 @@ int recurse(char * current_file, int depth, found_by reason) {
 
     // No need too recurse deeper? then there's also no reason to find rpaths.
     if (should_recurse == 0) {
-        for (int i = 0; i < depth; ++i) putchar(' ');
+        for (int i = 0; i < depth; ++i)
+            putchar(' ');
         if (soname != 0xFFFFFFFFFFFFFFFF)
             printf("\e[1;34m%s", buf + soname_buf_offset);
         else
             printf("\e[1;34m%s", current_file);
-        switch(reason) {
-        case RPATH: printf(" [rpath]\e[0m\n"); break;
-        case RUNPATH: printf(" [runpath]\e[0m\n"); break;
-        case DIRECT: printf(" [direct]\e[0m\n"); break;
-        case DEFAULT: printf(" [default path]\e[0m\n"); break;
-        default: printf("\e[0m\n"); break;
+        switch (reason) {
+        case RPATH:
+            printf(" [rpath]\e[0m\n");
+            break;
+        case RUNPATH:
+            printf(" [runpath]\e[0m\n");
+            break;
+        case DIRECT:
+            printf(" [direct]\e[0m\n");
+            break;
+        case DEFAULT:
+            printf(" [default path]\e[0m\n");
+            break;
+        default:
+            printf("\e[0m\n");
+            break;
         }
         fclose(fptr);
         goto success;
@@ -345,7 +373,6 @@ int recurse(char * current_file, int depth, found_by reason) {
         buf[buf_size++] = '\0';
     }
 
-
     // Copy needed libraries.
     size_t needed_buf_offsets[32];
     for (size_t i = 0; i < needed_count; ++i) {
@@ -361,7 +388,7 @@ int recurse(char * current_file, int depth, found_by reason) {
 
     fclose(fptr);
 
-    // todo: library path, default path, /etc/ld.so.conf, substitution, stop when already found.
+    // todo: library path, default path, /etc/ld.so.conf, substitution
 
     // Print them too
     // if (rpath != 0xFFFFFFFFFFFFFFFF) {
@@ -380,18 +407,28 @@ int recurse(char * current_file, int depth, found_by reason) {
     // }
 
     // We have found something, so print it, maybe by soname.
-    for (int i = 0; i < depth; ++i) putchar(' ');
-    if (soname != 0xFFFFFFFFFFFFFFFF) {
+    for (int i = 0; i < depth; ++i)
+        putchar(' ');
+    if (soname != 0xFFFFFFFFFFFFFFFF)
         printf("\e[1;36m%s\e[0m", buf + soname_buf_offset);
-    } else {
+    else
         printf("\e[1;36m%s\e[0m", current_file);
-    }
-    switch(reason) {
-    case RPATH: printf(" \e[0;33m[rpath]\e[0m\n"); break;
-    case RUNPATH: printf(" \e[0;33m[runpath]\e[0m\n"); break;
-    case DIRECT: printf(" \e[0;33m[direct]\e[0m\n"); break;
-    case DEFAULT: printf(" \e[0;33m[default path]\e[0m\n"); break;
-    default: printf("\n"); break;
+    switch (reason) {
+    case RPATH:
+        printf(" \e[0;33m[rpath]\e[0m\n");
+        break;
+    case RUNPATH:
+        printf(" \e[0;33m[runpath]\e[0m\n");
+        break;
+    case DIRECT:
+        printf(" \e[0;33m[direct]\e[0m\n");
+        break;
+    case DEFAULT:
+        printf(" \e[0;33m[default path]\e[0m\n");
+        break;
+    default:
+        printf("\n");
+        break;
     }
 
     // Buffer for the full search path
@@ -399,66 +436,77 @@ int recurse(char * current_file, int depth, found_by reason) {
 
     size_t needed_not_found = needed_count;
 
-    if (needed_not_found == 0) goto success;
+    if (needed_not_found == 0)
+        goto success;
 
     // First go over absolute paths in needed libs.
     for (size_t i = 0; i < needed_not_found;) {
-        char * name = buf + needed_buf_offsets[i];
+        char *name = buf + needed_buf_offsets[i];
         if (strchr(name, '/') != NULL) {
             // If it is not an absolute path, we bail, cause it then starts to
             // depend on the current working directory, which is rather
             // nonsensical. This is allowed by glibc though.
             if (name[0] != '/') {
-                for (int j = 0; j <= depth; ++j) putchar(' ');
+                for (int j = 0; j <= depth; ++j)
+                    putchar(' ');
                 printf("\e[1;31m%s is not absolute\e[0m\n", name);
             } else if (recurse(name, depth + 1, DIRECT) != 0) {
-                for (int j = 0; j <= depth; ++j) putchar(' ');
+                for (int j = 0; j <= depth; ++j)
+                    putchar(' ');
                 printf("\e[1;31m%s not found\e[0m\n", name);
             }
 
             // Even if not officially found, we mark it as found, cause we
             // handled the error here
             size_t tmp = needed_buf_offsets[i];
-            needed_buf_offsets[i] = needed_buf_offsets[needed_not_found-1];
+            needed_buf_offsets[i] = needed_buf_offsets[needed_not_found - 1];
             needed_buf_offsets[--needed_not_found] = tmp;
         } else {
             ++i;
         }
     }
 
-    if (needed_not_found == 0) goto success;
+    if (needed_not_found == 0)
+        goto success;
 
     // Consider rpaths only when runpath is empty
     if (runpath == 0xFFFFFFFFFFFFFFFF) {
-        // We have a stack of rpaths, try them all, starting with one set at this lib, then the parents.
+        // We have a stack of rpaths, try them all, starting with one set at
+        // this lib, then the parents.
         for (int j = depth; j >= 0; --j) {
-            if (needed_not_found == 0) break;
+            if (needed_not_found == 0)
+                break;
             char *rpaths = buf + rpath_offsets[j];
-            check_search_paths(RPATH, path, rpaths, &needed_not_found, needed_buf_offsets, depth);
+            check_search_paths(RPATH, path, rpaths, &needed_not_found,
+                               needed_buf_offsets, depth);
         }
     }
 
-    if (needed_not_found == 0) goto success;
+    if (needed_not_found == 0)
+        goto success;
 
     // Then consider runpaths
     if (runpath != 0xFFFFFFFFFFFFFFFF) {
         char *runpaths = buf + runpath_buf_offset;
-        check_search_paths(RUNPATH, path, runpaths, &needed_not_found, needed_buf_offsets, depth);
+        check_search_paths(RUNPATH, path, runpaths, &needed_not_found,
+                           needed_buf_offsets, depth);
     }
 
-
-    if (needed_not_found == 0) goto success;
+    if (needed_not_found == 0)
+        goto success;
 
     // Then consider standard paths
-    check_search_paths(DEFAULT, path, default_paths, &needed_not_found, needed_buf_offsets, depth);
+    check_search_paths(DEFAULT, path, default_paths, &needed_not_found,
+                       needed_buf_offsets, depth);
 
-
-    if (needed_not_found == 0) goto success;
+    if (needed_not_found == 0)
+        goto success;
 
     // Finally summary those that could not be found.
 
     for (size_t i = 0; i < needed_not_found; ++i) {
-        for (int j = 0; j <= depth; ++j) putchar(' ');
+        for (int j = 0; j <= depth; ++j)
+            putchar(' ');
         printf("\e[1;31m%s not found\e[0m\n", buf + needed_buf_offsets[i]);
     }
 
@@ -467,14 +515,15 @@ success:
     return 0;
 }
 
-int print_tree(char * path) {
+int print_tree(char *path) {
     // This is where we store rpaths, sonames, needed.
     buf = malloc(8192);
     buf_size = 0;
     visited_files_count = 0;
 
-    FILE * fptr = fopen(path, "rb");
-    if (fptr == NULL) return 1;
+    FILE *fptr = fopen(path, "rb");
+    if (fptr == NULL)
+        return 1;
 
     int code = recurse(path, 0, INPUT);
 
