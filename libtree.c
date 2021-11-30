@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 struct h_64 {
     uint16_t e_type;
@@ -72,6 +73,15 @@ size_t buf_size;
 // lib_c_rpath_offset]...
 size_t rpath_offsets[16];
 
+struct visited_file {
+    dev_t st_dev;
+    ino_t st_ino;
+};
+
+// Keep track of the files we've see
+struct visited_file visited_files[128];
+size_t visited_files_count;
+
 int recurse(char * current_file, int depth, found_by reason);
 
 void check_search_paths(found_by reason, char *path, char *rpaths, size_t *needed_not_found, size_t needed_buf_offsets[32], int depth) {
@@ -112,7 +122,6 @@ void check_search_paths(found_by reason, char *path, char *rpaths, size_t *neede
 }
 
 int recurse(char * current_file, int depth, found_by reason) {
-    // Found!
     FILE * fptr = fopen(current_file, "rb");
     if (fptr == NULL) return 1;
 
@@ -183,11 +192,33 @@ int recurse(char * current_file, int depth, found_by reason) {
         }
     }
 
+    // At this point we're going to store the file as "success"
+    struct stat finfo;
+    if (fstat(fileno(fptr), &finfo) != 0) {
+        fclose(fptr);
+        return 54;
+    }
+
+    int should_recurse = 1;
+    for (size_t i = 0; i < visited_files_count; ++i) {
+        if (visited_files[i].st_dev == finfo.st_dev && visited_files[i].st_ino == finfo.st_ino) {
+            should_recurse = 0;
+            break;
+        }
+    }
+
+    visited_files[visited_files_count].st_dev = finfo.st_dev;
+    visited_files[visited_files_count].st_ino = finfo.st_ino;
+    ++visited_files_count;
+
     // No dynamic section? -- let's just assume that is OK for now.
     // we simply print the filename
     if (p_offset == 0xffffffffffffffff) {
         for (int i = 0; i < depth; ++i) putchar(' ');
-        printf("\e[1;36m%s\e[0m", current_file);
+        if (should_recurse == 0)
+            printf("\e[1;36m%s\e[0m", current_file);
+        else
+            printf("\e[1;34m%s\e[0m", current_file);
         switch(reason) {
         case RPATH: printf(" [rpath]"); break;
         case RUNPATH: printf(" [runpath]"); break;
@@ -258,6 +289,36 @@ int recurse(char * current_file, int depth, found_by reason) {
     // Current character
     char c;
 
+    // Copy the current soname
+    size_t soname_buf_offset = buf_size;
+    if (soname != 0xFFFFFFFFFFFFFFFF) {
+        if (fseek(fptr, strtab_offset + soname, SEEK_SET) != 0) {
+            buf_size = old_buf_size;
+            return 16;
+        }
+        while ((c = getc(fptr)) != '\0' && c != EOF)
+            buf[buf_size++] = c;
+        buf[buf_size++] = '\0';
+    }
+
+    // No need too recurse deeper? then there's also no reason to find rpaths.
+    if (should_recurse == 0) {
+        for (int i = 0; i < depth; ++i) putchar(' ');
+        if (soname != 0xFFFFFFFFFFFFFFFF)
+            printf("\e[1;34m%s", buf + soname_buf_offset);
+        else
+            printf("\e[1;34m%s", current_file);
+        switch(reason) {
+        case RPATH: printf(" [rpath]\e[0m\n"); break;
+        case RUNPATH: printf(" [runpath]\e[0m\n"); break;
+        case DIRECT: printf(" [direct]\e[0m\n"); break;
+        case DEFAULT: printf(" [default path]\e[0m\n"); break;
+        default: printf("\e[0m\n"); break;
+        }
+        fclose(fptr);
+        goto success;
+    }
+
     // pointers into the buffer for rpath, soname and needed
     rpath_offsets[depth] = buf_size;
 
@@ -284,17 +345,6 @@ int recurse(char * current_file, int depth, found_by reason) {
         buf[buf_size++] = '\0';
     }
 
-    // Copy the current soname
-    size_t soname_buf_offset = buf_size;
-    if (soname != 0xFFFFFFFFFFFFFFFF) {
-        if (fseek(fptr, strtab_offset + soname, SEEK_SET) != 0) {
-            buf_size = old_buf_size;
-            return 16;
-        }
-        while ((c = getc(fptr)) != '\0' && c != EOF)
-            buf[buf_size++] = c;
-        buf[buf_size++] = '\0';
-    }
 
     // Copy needed libraries.
     size_t needed_buf_offsets[32];
@@ -421,6 +471,7 @@ int print_tree(char * path) {
     // This is where we store rpaths, sonames, needed.
     buf = malloc(8192);
     buf_size = 0;
+    visited_files_count = 0;
 
     FILE * fptr = fopen(path, "rb");
     if (fptr == NULL) return 1;
