@@ -4,6 +4,10 @@
 #include <string.h>
 #include <sys/stat.h>
 
+// TODO: LD_LIBRARY_PATH, default_path, /etc/ld.so.conf
+// TODO: rpath substitution ${ORIGIN} / $ORIGIN / ${LIB} / $LIB / ${PLATFORM} /
+// $PLATFORM
+
 struct h_64 {
     uint16_t e_type;
     uint16_t e_machine;
@@ -70,6 +74,7 @@ size_t buf_size;
 // where rpaths start, like [lib_a_rpath_offset, lib_b_rpath_offset,
 // lib_c_rpath_offset]...
 size_t rpath_offsets[16];
+char found_all_needed[16];
 
 struct visited_file {
     dev_t st_dev;
@@ -80,6 +85,23 @@ struct visited_file {
 struct visited_file visited_files[128];
 size_t visited_files_count;
 
+void tree_preamble(int depth) {
+    if (depth == 0)
+        return;
+
+    for (int i = 0; i < depth - 1; ++i) {
+        if (found_all_needed[i])
+            printf("    ");
+        else
+            printf("\xe2\x94\x82   "); // "│   "
+    }
+
+    if (found_all_needed[depth - 1])
+        printf("\xe2\x94\x94\xe2\x94\x80\xe2\x94\x80 "); // "└── "
+    else
+        printf("\xe2\x94\x9c\xe2\x94\x80\xe2\x94\x80 "); // "├── "
+}
+
 int recurse(char *current_file, int depth, found_by reason);
 
 void check_search_paths(found_by reason, char *path, char *rpaths,
@@ -87,8 +109,8 @@ void check_search_paths(found_by reason, char *path, char *rpaths,
                         int depth) {
     while (*rpaths != '\0') {
         // First remove trailing colons
-        for (; *rpaths == ':' && *rpaths != '\0'; ++rpaths)
-            ;
+        for (; *rpaths == ':' && *rpaths != '\0'; ++rpaths) {
+        };
 
         // Check if it was only colons
         if (*rpaths == '\0')
@@ -110,7 +132,7 @@ void check_search_paths(found_by reason, char *path, char *rpaths,
         for (size_t i = 0; i < *needed_not_found;) {
             // Append the soname.
             strcpy(search_path_end, buf + needed_buf_offsets[i]);
-
+            found_all_needed[depth] = *needed_not_found <= 1;
             if (recurse(path, depth + 1, reason) == 0) {
                 // Found it, so swap out the current soname to the back,
                 // and reduce the number of to be found by one.
@@ -248,10 +270,10 @@ int recurse(char *current_file, int depth, found_by reason) {
     if (fseek(fptr, p_offset, SEEK_SET) != 0)
         return 10;
 
-    uint64_t strtab = 0xFFFFFFFFFFFFFFFF;
-    uint64_t rpath = 0xFFFFFFFFFFFFFFFF;
-    uint64_t runpath = 0xFFFFFFFFFFFFFFFF;
-    uint64_t soname = 0xFFFFFFFFFFFFFFFF;
+    uint64_t strtab = 0xffffffffffffffff;
+    uint64_t rpath = 0xffffffffffffffff;
+    uint64_t runpath = 0xffffffffffffffff;
+    uint64_t soname = 0xffffffffffffffff;
 
     // Offsets in strtab
     uint64_t neededs[32];
@@ -285,7 +307,7 @@ int recurse(char *current_file, int depth, found_by reason) {
         }
     }
 
-    if (strtab == 0xFFFFFFFFFFFFFFFF)
+    if (strtab == 0xffffffffffffffff)
         return 14;
 
     // find the file offset corresponding to the strtab address
@@ -308,7 +330,7 @@ int recurse(char *current_file, int depth, found_by reason) {
 
     // Copy the current soname
     size_t soname_buf_offset = buf_size;
-    if (soname != 0xFFFFFFFFFFFFFFFF) {
+    if (soname != 0xffffffffffffffff) {
         if (fseek(fptr, strtab_offset + soname, SEEK_SET) != 0) {
             buf_size = old_buf_size;
             return 16;
@@ -320,9 +342,8 @@ int recurse(char *current_file, int depth, found_by reason) {
 
     // No need too recurse deeper? then there's also no reason to find rpaths.
     if (should_recurse == 0) {
-        for (int i = 0; i < depth; ++i)
-            putchar(' ');
-        if (soname != 0xFFFFFFFFFFFFFFFF)
+        tree_preamble(depth);
+        if (soname != 0xffffffffffffffff)
             printf("\e[1;34m%s", buf + soname_buf_offset);
         else
             printf("\e[1;34m%s", current_file);
@@ -351,7 +372,7 @@ int recurse(char *current_file, int depth, found_by reason) {
     rpath_offsets[depth] = buf_size;
 
     // Copy DT_PRATH
-    if (rpath != 0xFFFFFFFFFFFFFFFF) {
+    if (rpath != 0xffffffffffffffff) {
         if (fseek(fptr, strtab_offset + rpath, SEEK_SET) != 0) {
             buf_size = old_buf_size;
             return 16;
@@ -363,7 +384,7 @@ int recurse(char *current_file, int depth, found_by reason) {
 
     // Copy DT_RUNPATH
     size_t runpath_buf_offset = buf_size;
-    if (runpath != 0xFFFFFFFFFFFFFFFF) {
+    if (runpath != 0xffffffffffffffff) {
         if (fseek(fptr, strtab_offset + runpath, SEEK_SET) != 0) {
             buf_size = old_buf_size;
             return 16;
@@ -388,28 +409,10 @@ int recurse(char *current_file, int depth, found_by reason) {
 
     fclose(fptr);
 
-    // todo: library path, default path, /etc/ld.so.conf, substitution
-
-    // Print them too
-    // if (rpath != 0xFFFFFFFFFFFFFFFF) {
-    //     for (int i = 0; i < depth; ++i) putchar(' ');
-    //     printf("rpath = %s\n", buf + rpath_buf_offset);
-    // }
-
-    // if (soname != 0xFFFFFFFFFFFFFFFF) {
-    //     for (int i = 0; i < depth; ++i) putchar(' ');
-    //     printf("soname = %s\n", buf + soname_buf_offset);
-    // }
-
-    // for (size_t i = 0; i < needed_count; ++i) {
-    //     for (int i = 0; i < depth; ++i) putchar(' ');
-    //     printf("needed = %s\n", buf + needed_buf_offsets[i]);
-    // }
-
     // We have found something, so print it, maybe by soname.
-    for (int i = 0; i < depth; ++i)
-        putchar(' ');
-    if (soname != 0xFFFFFFFFFFFFFFFF)
+    tree_preamble(depth);
+
+    if (soname != 0xffffffffffffffff)
         printf("\e[1;36m%s\e[0m", buf + soname_buf_offset);
     else
         printf("\e[1;36m%s\e[0m", current_file);
@@ -446,13 +449,12 @@ int recurse(char *current_file, int depth, found_by reason) {
             // If it is not an absolute path, we bail, cause it then starts to
             // depend on the current working directory, which is rather
             // nonsensical. This is allowed by glibc though.
+            found_all_needed[depth] = needed_not_found <= 1;
             if (name[0] != '/') {
-                for (int j = 0; j <= depth; ++j)
-                    putchar(' ');
+                tree_preamble(depth + 1);
                 printf("\e[1;31m%s is not absolute\e[0m\n", name);
             } else if (recurse(name, depth + 1, DIRECT) != 0) {
-                for (int j = 0; j <= depth; ++j)
-                    putchar(' ');
+                tree_preamble(depth + 1);
                 printf("\e[1;31m%s not found\e[0m\n", name);
             }
 
@@ -470,7 +472,7 @@ int recurse(char *current_file, int depth, found_by reason) {
         goto success;
 
     // Consider rpaths only when runpath is empty
-    if (runpath == 0xFFFFFFFFFFFFFFFF) {
+    if (runpath == 0xffffffffffffffff) {
         // We have a stack of rpaths, try them all, starting with one set at
         // this lib, then the parents.
         for (int j = depth; j >= 0; --j) {
@@ -486,7 +488,7 @@ int recurse(char *current_file, int depth, found_by reason) {
         goto success;
 
     // Then consider runpaths
-    if (runpath != 0xFFFFFFFFFFFFFFFF) {
+    if (runpath != 0xffffffffffffffff) {
         char *runpaths = buf + runpath_buf_offset;
         check_search_paths(RUNPATH, path, runpaths, &needed_not_found,
                            needed_buf_offsets, depth);
@@ -502,11 +504,10 @@ int recurse(char *current_file, int depth, found_by reason) {
     if (needed_not_found == 0)
         goto success;
 
-    // Finally summary those that could not be found.
-
+    // Finally summarize those that could not be found.
     for (size_t i = 0; i < needed_not_found; ++i) {
-        for (int j = 0; j <= depth; ++j)
-            putchar(' ');
+        tree_preamble(depth + 1);
+
         printf("\e[1;31m%s not found\e[0m\n", buf + needed_buf_offsets[i]);
     }
 
@@ -533,8 +534,8 @@ int print_tree(char *path) {
 }
 
 int main(int argc, char **argv) {
-    for (size_t optind = 1; optind < argc && argv[optind][0] == '-'; optind++) {
-        switch (argv[optind][1]) {
+    for (size_t i = 1; i < argc && argv[i][0] == '-'; i++) {
+        switch (argv[i][1]) {
         case 'v':
             printf("2.1.0\n");
             return 0;
