@@ -522,8 +522,8 @@ int recurse(char *current_file, int depth, found_by reason) {
 
     // Finally summarize those that could not be found.
     for (size_t i = 0; i < needed_not_found; ++i) {
+        found_all_needed[depth] = i + 1 >= needed_not_found;
         tree_preamble(depth + 1);
-
         printf("\e[1;31m%s not found\e[0m\n", buf + needed_buf_offsets[i]);
     }
 
@@ -626,7 +626,8 @@ int parse_ld_conf(char *path) {
 }
 
 int print_tree(char *path) {
-    // This is where we store rpaths, sonames, needed.
+    // This is where we store rpaths, sonames, needed, search paths.
+    // and yes I should fix buffer overflow issues...
     buf = malloc(16 * 1024);
     buf_size = 0;
     visited_files_count = 0;
