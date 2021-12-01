@@ -177,7 +177,7 @@ int recurse(char *current_file, int depth, found_by reason) {
     int is_little_endian = e_ident[5] == '\x01';
 
     // For now skip 32 bit and non-little endian
-    if (!is_64_bit && !is_little_endian)
+    if (!is_64_bit || !is_little_endian)
         return ERR_UNSUPPORTED_ELF_FILE;
 
     // And get the type
@@ -638,10 +638,6 @@ int print_tree(char *path) {
     if (buf_size > 0)
         buf[buf_size - 1] = '\0';
 
-    FILE *fptr = fopen(path, "rb");
-    if (fptr == NULL)
-        return 1;
-
     int code = recurse(path, 0, INPUT);
 
     free(buf);
@@ -666,8 +662,6 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Usage: %s [-h] [file...]\n", argv[0]);
         return 1;
     }
-
-    // Create the buffers/
 
     return print_tree(argv[1]);
 }
