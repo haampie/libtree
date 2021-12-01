@@ -5,7 +5,6 @@ libtree in C
 - faster (only reads the bare minimum from elf files)
 
 todo:
-- ld.so.conf parsing
 - rpath substitution
 - byte swapping for non-native endianness
 - 32 bit

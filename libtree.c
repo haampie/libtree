@@ -2,9 +2,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <ctype.h>
+#include <glob.h>
 #include <sys/stat.h>
 
-// TODO: LD_LIBRARY_PATH, default_path, /etc/ld.so.conf
+// TODO: LD_LIBRARY_PATH
 // TODO: rpath substitution ${ORIGIN} / $ORIGIN / ${LIB} / $LIB / ${PLATFORM} /
 // $PLATFORM
 
@@ -60,9 +63,9 @@ struct dynamic_64 {
 #define ERR_UNSUPPORTED_ELF_FILE 1
 #define ERR_INVALID_HEADER 1
 
-typedef enum { INPUT, DIRECT, RPATH, RUNPATH, DEFAULT } found_by;
+typedef enum { INPUT, DIRECT, RPATH, RUNPATH, LD_SO_CONF, DEFAULT } found_by;
 
-char *default_paths = "/usr/lib/x86_64-linux-gnu/:/usr/lib/:/usr/lib64";
+char *default_paths = "/lib:/lib64:/usr/lib:/usr/lib64";
 
 // large buffer in which to copy rpaths, needed libraries and sonames.
 char *buf;
@@ -255,6 +258,9 @@ int recurse(char *current_file, int depth, found_by reason) {
         case RUNPATH:
             printf(" [runpath]");
             break;
+        case LD_SO_CONF:
+            printf(" [ld.so.conf]");
+            break;
         case DIRECT:
             printf(" [direct]");
             break;
@@ -354,6 +360,9 @@ int recurse(char *current_file, int depth, found_by reason) {
         case RUNPATH:
             printf(" [runpath]\e[0m\n");
             break;
+        case LD_SO_CONF:
+            printf(" [ld.so.conf]\e[0m\n");
+            break;
         case DIRECT:
             printf(" [direct]\e[0m\n");
             break;
@@ -426,6 +435,9 @@ int recurse(char *current_file, int depth, found_by reason) {
     case DIRECT:
         printf(" \e[0;33m[direct]\e[0m\n");
         break;
+    case LD_SO_CONF:
+        printf(" \e[0;33m[ld.so.conf]\e[0m\n");
+        break;
     case DEFAULT:
         printf(" \e[0;33m[default path]\e[0m\n");
         break;
@@ -497,6 +509,10 @@ int recurse(char *current_file, int depth, found_by reason) {
     if (needed_not_found == 0)
         goto success;
 
+    // Check ld.so.conf paths
+    check_search_paths(LD_SO_CONF, path, buf, &needed_not_found,
+                       needed_buf_offsets, depth);
+
     // Then consider standard paths
     check_search_paths(DEFAULT, path, default_paths, &needed_not_found,
                        needed_buf_offsets, depth);
@@ -516,11 +532,111 @@ success:
     return 0;
 }
 
+int parse_ld_conf(char *path);
+
+int ld_conf_globbing(char *pattern) {
+    glob_t result;
+    memset(&result, 0, sizeof(result));
+    int status = glob(pattern, 0, NULL, &result);
+
+    // Handle errors (no result is not an error...)
+    switch (status) {
+    case GLOB_NOSPACE:
+    case GLOB_ABORTED:
+        globfree(&result);
+        return 1;
+    case GLOB_NOMATCH:
+        globfree(&result);
+        return 0;
+    }
+
+    // Otherwise parse the files we've found!
+    int code = 0;
+    for (size_t i = 0; i < result.gl_pathc; ++i)
+        code |= parse_ld_conf(result.gl_pathv[i]);
+
+    globfree(&result);
+    return code;
+}
+
+int parse_ld_conf(char *path) {
+    FILE *fptr = fopen(path, "r");
+
+    if (fptr == NULL)
+        return 1;
+
+    size_t len;
+    ssize_t nread;
+    char *line = NULL;
+
+    while ((nread = getline(&line, &len, fptr)) != -1) {
+        char *begin = line;
+        // Remove leading whitespace
+        for (; isspace(*begin); ++begin)
+            ;
+
+        // Remove trailing comments
+        char *comment = strchr(begin, '#');
+        if (comment != NULL)
+            *comment = '\0';
+
+        // Go to the last character in the line
+        char *end = strchr(begin, '\0');
+
+        // Remove trailing whitespace
+        // although, whitespace is technically allowed in paths :think:
+        while (end != begin)
+            if (!isspace(*--end))
+                break;
+
+        // Skip empty lines
+        if (begin == end)
+            continue;
+
+        // Put back the end of the string
+        end[1] = '\0';
+
+        // 'include ': glob whatever follows.
+        if (strncmp(begin, "include", 7) == 0 && isspace(begin[7])) {
+            begin += 8;
+            // Remove more whitespace.
+            for (; isspace(*begin); ++begin) {}
+
+            // String can't be empty as it was trimmed and
+            // still had whitespace next to include.
+
+            // TODO: check if relative globbing to the
+            // current file is supported or not.
+            // We do *not* support it right now.
+            if (*begin != '/') continue;
+
+            ld_conf_globbing(begin);
+        } else {
+            size_t n = strlen(begin);
+            memcpy(buf + buf_size, begin, n);
+            buf_size += n;
+            buf[buf_size++] = ':';
+        }
+    }
+
+    free(line);
+    fclose(fptr);
+
+    return 0;
+}
+
 int print_tree(char *path) {
     // This is where we store rpaths, sonames, needed.
-    buf = malloc(8192);
+    buf = malloc(16 * 1024);
     buf_size = 0;
     visited_files_count = 0;
+
+    // First collect standard paths
+    parse_ld_conf("/etc/ld.so.conf");
+
+    // Make sure the last colon is replaced with a null.
+    if (buf_size > 0)
+        buf[buf_size - 1] = '\0';
 
     FILE *fptr = fopen(path, "rb");
     if (fptr == NULL)
@@ -534,6 +650,7 @@ int print_tree(char *path) {
 }
 
 int main(int argc, char **argv) {
+
     for (size_t i = 1; i < argc && argv[i][0] == '-'; i++) {
         switch (argv[i][1]) {
         case 'v':
@@ -549,6 +666,8 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Usage: %s [-h] [file...]\n", argv[0]);
         return 1;
     }
+
+    // Create the buffers/
 
     return print_tree(argv[1]);
 }
