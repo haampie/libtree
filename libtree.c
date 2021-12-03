@@ -64,7 +64,15 @@ struct dynamic_64 {
 
 #define MAX_SIZE_T 0xFFFFFFFFFFFFFFFF
 
-typedef enum { INPUT, DIRECT, RPATH, LD_LIBRARY_PATH, RUNPATH, LD_SO_CONF, DEFAULT } how_t;
+typedef enum {
+    INPUT,
+    DIRECT,
+    RPATH,
+    LD_LIBRARY_PATH,
+    RUNPATH,
+    LD_SO_CONF,
+    DEFAULT
+} how_t;
 
 struct found_t {
     how_t how;
@@ -639,11 +647,10 @@ int recurse(char *current_file, int depth, struct found_t reason) {
 
     // Then try LD_LIBRARY_PATH, if we have it.
     if (ld_library_path_offset != MAX_SIZE_T) {
-        char * ld_library_paths = buf + ld_library_path_offset;
-        check_search_paths((struct found_t){.how = LD_LIBRARY_PATH, .depth = 0}, path,
-                           ld_library_paths, &needed_not_found, needed_buf_offsets,
-                           depth);
-
+        char *ld_library_paths = buf + ld_library_path_offset;
+        check_search_paths((struct found_t){.how = LD_LIBRARY_PATH, .depth = 0},
+                           path, ld_library_paths, &needed_not_found,
+                           needed_buf_offsets, depth);
     }
 
     if (needed_not_found == 0)
@@ -724,8 +731,8 @@ int parse_ld_conf(char *path) {
     while ((nread = getline(&line, &len, fptr)) != -1) {
         char *begin = line;
         // Remove leading whitespace
-        for (; isspace(*begin); ++begin)
-            ;
+        for (; isspace(*begin); ++begin) {
+        }
 
         // Remove trailing comments
         char *comment = strchr(begin, '#');
@@ -780,12 +787,13 @@ int parse_ld_conf(char *path) {
 }
 
 void parse_ld_library_path() {
-    char * LD_LIBRARY_PATH = "LD_LIBRARY_PATH";
+    char *LD_LIBRARY_PATH = "LD_LIBRARY_PATH";
     ld_library_path_offset = MAX_SIZE_T;
-    char * val = getenv(LD_LIBRARY_PATH);
+    char *val = getenv(LD_LIBRARY_PATH);
 
     // not set, so nothing to do.
-    if (val == NULL) return;
+    if (val == NULL)
+        return;
 
     ld_library_path_offset = buf_size;
 
@@ -797,9 +805,8 @@ void parse_ld_library_path() {
     memcpy(buf + buf_size, val, bytes);
 
     // replace ; with :
-    char * search = buf + buf_size;
-
-    while((search = strchr(search, ';')) != NULL)
+    char *search = buf + buf_size;
+    while ((search = strchr(search, ';')) != NULL)
         *search++ = ':';
 
     buf_size += bytes;
