@@ -1,3 +1,7 @@
+LD_LIBRARY_PATH:=
+
+.PHONY: clean
+
 all: check
 
 some_dir/lib_f.so:
