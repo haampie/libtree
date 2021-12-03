@@ -502,10 +502,12 @@ int recurse(char *current_file, int depth, struct found_t reason) {
     }
 
     // pointers into the buffer for rpath, soname and needed
-    rpath_offsets[depth] = buf_size;
 
     // Copy DT_PRATH
-    if (rpath != MAX_SIZE_T) {
+    if (rpath == MAX_SIZE_T) {
+        rpath_offsets[depth] = MAX_SIZE_T;
+    } else {
+        rpath_offsets[depth] = buf_size;
         if (fseek(fptr, strtab_offset + rpath, SEEK_SET) != 0) {
             buf_size = old_buf_size;
             return 1;
@@ -635,6 +637,8 @@ int recurse(char *current_file, int depth, struct found_t reason) {
         for (int j = depth; j >= 0; --j) {
             if (needed_not_found == 0)
                 break;
+            if (rpath_offsets[j] == MAX_SIZE_T)
+                continue;
             char *rpaths = buf + rpath_offsets[j];
             check_search_paths((struct found_t){.how = RPATH, .depth = j}, path,
                                rpaths, &needed_not_found, needed_buf_offsets,
@@ -685,6 +689,56 @@ int recurse(char *current_file, int depth, struct found_t reason) {
         tree_preamble(depth + 1);
         printf("\e[1;31m%s not found\e[0m\n", buf + needed_buf_offsets[i]);
     }
+
+    // If anything was not found, we print the search paths in order they are
+    // considered.
+    char *indent = malloc(6 * depth);
+    char *p = indent;
+    for (int i = 0; i < depth - 1; ++i) {
+        if (found_all_needed[i]) {
+            memcpy(p, "    ", 4);
+            p += 4;
+        } else {
+            memcpy(p, "\xe2\x94\x82   ", 6);
+            p += 6;
+        }
+    }
+    strcpy(p, "    ");
+
+    printf(
+        "%s\e[1;31m^^^^\e[0m\n%s \e[1;90mThe following paths were considered\n",
+        indent, indent);
+
+    // Consider rpaths only when runpath is empty
+    if (runpath != MAX_SIZE_T) {
+        printf("%s 1. rpaths [skipped: runpath is used]:\n", indent);
+    } else {
+        printf("%s 1. rpaths:\n", indent);
+    }
+
+    for (int j = depth; j >= 0; --j)
+        if (rpath_offsets[j] != MAX_SIZE_T)
+            printf("%s - %s\n", indent, buf + rpath_offsets[j]);
+
+    if (ld_library_path_offset == MAX_SIZE_T) {
+        printf("%s 2. LD_LIBRARY_PATH was not set\n", indent);
+    } else {
+        printf("%s 2. LD_LIBRARY_PATH:\n%s    - %s\n", indent, indent,
+               buf + ld_library_path_offset);
+    }
+
+    if (runpath == MAX_SIZE_T) {
+        printf("%s 3. runpath was not set\n", indent);
+    } else {
+        printf("%s 3. runpath:\n%s    - %s\n", indent, indent,
+               buf + runpath_buf_offset);
+    }
+
+    printf("%s 4. ld.so.conf:\n%s    - %s\n", indent, indent, buf);
+    printf("%s 5. Standard paths:\n%s    - %s\n", indent, indent,
+           default_paths);
+    printf("\e[0m");
+    free(indent);
 
 success:
     buf_size = old_buf_size;
