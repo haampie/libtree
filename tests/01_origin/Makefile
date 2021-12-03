@@ -1,8 +1,10 @@
 # Basic test of $ORIGIN interpolation in rpath & runpath.
 
-all: check
-
 .PHONY: clean
+
+LD_LIBRARY_PATH:=
+
+all: check
 
 liba.so: 
 	echo 'int f(){return 1;}' | $(CC) -shared -Wl,-soname,$@ -o $@ -nostdlib -x c -
