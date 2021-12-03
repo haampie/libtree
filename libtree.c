@@ -721,7 +721,7 @@ int recurse(char *current_file, int depth, struct found_t reason) {
 
     // If anything was not found, we print the search paths in order they are
     // considered.
-    char *vertical_error_frame = "    \e[1;31m\xe2\x94\x8a\e[0m";
+    char *vertical_error_frame = "    \e[0;31m\xe2\x94\x8a\e[0m";
     char *indent = malloc(6 * (depth - 1) + sizeof(vertical_error_frame));
     char *p = indent;
     for (int i = 0; i < depth - 1; ++i) {
@@ -736,14 +736,14 @@ int recurse(char *current_file, int depth, struct found_t reason) {
     // dotted | in red
     strcpy(p, vertical_error_frame);
 
-    printf("%s\e[1;90m Paths considered in this order:\n", indent);
+    printf("%s\e[0;90m Paths considered in this order:\n", indent);
 
     // Consider rpaths only when runpath is empty
     if (runpath != MAX_SIZE_T) {
-        printf("%s\e[1;90m 1. rpath is skipped because runpath was set\n",
+        printf("%s\e[0;90m 1. rpath is skipped because runpath was set\n",
                indent);
     } else {
-        printf("%s\e[1;90m 1. rpath:\n", indent);
+        printf("%s\e[0;90m 1. rpath:\n", indent);
         for (int j = depth; j >= 0; --j) {
             if (rpath_offsets[j] != MAX_SIZE_T) {
                 printf("%s\e[1;90m    depth %d\n", indent, j);
@@ -753,23 +753,23 @@ int recurse(char *current_file, int depth, struct found_t reason) {
     }
 
     if (ld_library_path_offset == MAX_SIZE_T) {
-        printf("%s\e[1;90m 2. LD_LIBRARY_PATH was not set\n", indent);
+        printf("%s\e[0;90m 2. LD_LIBRARY_PATH was not set\n", indent);
     } else {
-        printf("%s\e[1;90m 2. LD_LIBRARY_PATH:\n", indent);
+        printf("%s\e[0;90m 2. LD_LIBRARY_PATH:\n", indent);
         print_colon_delimited_paths(buf + ld_library_path_offset, indent);
     }
 
     if (runpath == MAX_SIZE_T) {
-        printf("%s\e[1;90m 3. runpath was not set\n", indent);
+        printf("%s\e[0;90m 3. runpath was not set\n", indent);
     } else {
-        printf("%s\e[1;90m 3. runpath:\n", indent);
+        printf("%s\e[0;90m 3. runpath:\n", indent);
         print_colon_delimited_paths(buf + runpath_buf_offset, indent);
     }
 
-    printf("%s\e[1;90m 4. ld.so.conf:\n", indent);
+    printf("%s\e[0;90m 4. ld.so.conf:\n", indent);
     print_colon_delimited_paths(buf + ld_so_conf_offset, indent);
 
-    printf("%s\e[1;90m 5. Standard paths:\n", indent);
+    printf("%s\e[0;90m 5. Standard paths:\n", indent);
     print_colon_delimited_paths(buf + default_paths_offset, indent);
     printf("\e[0m");
     free(indent);
