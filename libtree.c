@@ -113,7 +113,7 @@ void check_search_paths(found_by reason, char *path, char *rpaths,
     while (*rpaths != '\0') {
         // First remove trailing colons
         for (; *rpaths == ':' && *rpaths != '\0'; ++rpaths) {
-        };
+        }
 
         // Check if it was only colons
         if (*rpaths == '\0')
@@ -148,6 +148,83 @@ void check_search_paths(found_by reason, char *path, char *rpaths,
             }
         }
     }
+}
+
+int interpolate_variables(char *dst, char *src, char *ORIGIN, char *LIB,
+                          char *PLATFORM) {
+    // We do *not* write to dst if there is no variable
+    // in th src string -- this is a small optimization,
+    // cause it's unlikely we find variables (at least,
+    // I think).
+    char *not_yet_copied = src;
+    char *p_src = src;
+    char *p_dst = dst;
+
+    while ((p_src = strchr(p_src, '$')) != NULL) {
+        // Number of bytes before the dollar.
+        size_t n = p_src - not_yet_copied;
+
+        // Go past the dollar.
+        ++p_src;
+
+        // what to copy over.
+        char *var_val = NULL;
+
+        // Then check if it's a {ORIGIN} / ORIGIN.
+        if (strncmp(p_src, "{ORIGIN}", 8) == 0) {
+            var_val = ORIGIN;
+            p_src += 8;
+        } else if (strncmp(p_src, "ORIGIN", 6) == 0) {
+            var_val = ORIGIN;
+            p_src += 6;
+        } else if (strncmp(p_src, "{LIB}", 5) == 0) {
+            var_val = LIB;
+            p_src += 5;
+        } else if (strncmp(p_src, "LIB", 3) == 0) {
+            var_val = LIB;
+            p_src += 3;
+        } else if (strncmp(p_src, "{PLATFORM}", 10) == 0) {
+            var_val = PLATFORM;
+            p_src += 10;
+        } else if (strncmp(p_src, "PLATFORM", 8) == 0) {
+            var_val = PLATFORM;
+            p_src += 8;
+        } else {
+            continue;
+        }
+
+        // First copy over the string until the variable.
+        memcpy(p_dst, not_yet_copied, n);
+        p_dst += n;
+
+        // Then set not_yet_copied *after* the variable.
+        not_yet_copied = p_src;
+
+        // Then copy the variable value (without null).
+        size_t var_len = strlen(var_val);
+        memcpy(p_dst, var_val, var_len);
+        p_dst += var_len;
+    }
+
+    // Did we copy anything? That implies a variable was interpolated.
+    // Copy the remainder, including the \0.
+    if (not_yet_copied != src) {
+        char *end = strchr(src, '\0');
+        size_t remainder = end - not_yet_copied + 1;
+        memcpy(p_dst, not_yet_copied, remainder);
+        p_dst += remainder;
+        return p_dst - dst;
+    }
+
+    return 0;
+}
+
+void copy_from_file(FILE *fptr) {
+    size_t offset = buf_size;
+    char c;
+    while ((c = getc(fptr)) != '\0' && c != EOF)
+        buf[buf_size++] = c;
+    buf[buf_size++] = '\0';
 }
 
 int recurse(char *current_file, int depth, found_by reason) {
@@ -377,6 +454,18 @@ int recurse(char *current_file, int depth, found_by reason) {
         goto success;
     }
 
+    // Store the ORIGIN string.
+    char origin[4096];
+    char *last_slash = strrchr(current_file, '/');
+    if (last_slash != NULL) {
+        // we're also copying the last /.
+        size_t bytes = last_slash - current_file + 1;
+        memcpy(origin, current_file, bytes);
+        origin[bytes + 1] = '\0';
+    } else {
+        origin[0] = '\0';
+    }
+
     // pointers into the buffer for rpath, soname and needed
     rpath_offsets[depth] = buf_size;
 
@@ -384,11 +473,19 @@ int recurse(char *current_file, int depth, found_by reason) {
     if (rpath != 0xffffffffffffffff) {
         if (fseek(fptr, strtab_offset + rpath, SEEK_SET) != 0) {
             buf_size = old_buf_size;
-            return 16;
+            return 1;
         }
-        while ((c = getc(fptr)) != '\0' && c != EOF)
-            buf[buf_size++] = c;
-        buf[buf_size++] = '\0';
+
+        copy_from_file(fptr);
+
+        // We store the interpolated string right after the literal copy.
+        size_t bytes_written =
+            interpolate_variables(buf + buf_size, buf + rpath_offsets[depth],
+                                  origin, "LIB", "x86_64");
+        if (bytes_written > 0) {
+            rpath_offsets[depth] = buf_size;
+            buf_size += bytes_written;
+        }
     }
 
     // Copy DT_RUNPATH
@@ -396,11 +493,18 @@ int recurse(char *current_file, int depth, found_by reason) {
     if (runpath != 0xffffffffffffffff) {
         if (fseek(fptr, strtab_offset + runpath, SEEK_SET) != 0) {
             buf_size = old_buf_size;
-            return 16;
+            return 1;
         }
-        while ((c = getc(fptr)) != '\0' && c != EOF)
-            buf[buf_size++] = c;
-        buf[buf_size++] = '\0';
+
+        copy_from_file(fptr);
+
+        // We store the interpolated string right after the literal copy.
+        size_t bytes_written = interpolate_variables(
+            buf + buf_size, buf + runpath_buf_offset, origin, "LIB", "x86_64");
+        if (bytes_written > 0) {
+            runpath_buf_offset = buf_size;
+            buf_size += bytes_written;
+        }
     }
 
     // Copy needed libraries.
@@ -409,11 +513,9 @@ int recurse(char *current_file, int depth, found_by reason) {
         needed_buf_offsets[i] = buf_size;
         if (fseek(fptr, strtab_offset + neededs[i], SEEK_SET) != 0) {
             buf_size = old_buf_size;
-            return 16;
+            return 1;
         }
-        while ((c = getc(fptr)) != '\0' && c != EOF)
-            buf[buf_size++] = c;
-        buf[buf_size++] = '\0';
+        copy_from_file(fptr);
     }
 
     fclose(fptr);
@@ -600,7 +702,8 @@ int parse_ld_conf(char *path) {
         if (strncmp(begin, "include", 7) == 0 && isspace(begin[7])) {
             begin += 8;
             // Remove more whitespace.
-            for (; isspace(*begin); ++begin) {}
+            for (; isspace(*begin); ++begin) {
+            }
 
             // String can't be empty as it was trimmed and
             // still had whitespace next to include.
@@ -608,7 +711,8 @@ int parse_ld_conf(char *path) {
             // TODO: check if relative globbing to the
             // current file is supported or not.
             // We do *not* support it right now.
-            if (*begin != '/') continue;
+            if (*begin != '/')
+                continue;
 
             ld_conf_globbing(begin);
         } else {
@@ -647,7 +751,6 @@ int print_tree(char *path) {
 }
 
 int main(int argc, char **argv) {
-
     for (size_t i = 1; i < argc && argv[i][0] == '-'; i++) {
         switch (argv[i][1]) {
         case 'v':
