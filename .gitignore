@@ -1,3 +1,5 @@
 *.o
+*.so
+exe*
 libtree
 *.swp

@@ -63,7 +63,15 @@ struct dynamic_64 {
 #define ERR_UNSUPPORTED_ELF_FILE 1
 #define ERR_INVALID_HEADER 1
 
-typedef enum { INPUT, DIRECT, RPATH, RUNPATH, LD_SO_CONF, DEFAULT } found_by;
+typedef enum { INPUT, DIRECT, RPATH, RUNPATH, LD_SO_CONF, DEFAULT } how_t;
+
+struct found_t {
+    how_t how;
+    // only set when found by in the rpath NOT of the direct parent.  so, when
+    // it is found in a "special" way only rpaths allow, which is worth
+    // informing the user about.
+    int depth;
+};
 
 char *default_paths = "/lib:/lib64:/usr/lib:/usr/lib64";
 
@@ -105,9 +113,9 @@ void tree_preamble(int depth) {
         printf("\xe2\x94\x9c\xe2\x94\x80\xe2\x94\x80 "); // "├── "
 }
 
-int recurse(char *current_file, int depth, found_by reason);
+int recurse(char *current_file, int depth, struct found_t reason);
 
-void check_search_paths(found_by reason, char *path, char *rpaths,
+void check_search_paths(struct found_t reason, char *path, char *rpaths,
                         size_t *needed_not_found, size_t needed_buf_offsets[32],
                         int depth) {
     while (*rpaths != '\0') {
@@ -227,7 +235,7 @@ void copy_from_file(FILE *fptr) {
     buf[buf_size++] = '\0';
 }
 
-int recurse(char *current_file, int depth, found_by reason) {
+int recurse(char *current_file, int depth, struct found_t reason) {
     FILE *fptr = fopen(current_file, "rb");
     if (fptr == NULL)
         return 1;
@@ -328,9 +336,12 @@ int recurse(char *current_file, int depth, found_by reason) {
             printf("\e[1;36m%s\e[0m", current_file);
         else
             printf("\e[1;34m%s\e[0m", current_file);
-        switch (reason) {
+        switch (reason.how) {
         case RPATH:
-            printf(" [rpath]");
+            if (reason.depth + 1 == depth)
+                printf(" [rpath]");
+            else
+                printf(" [rpath of %d]", reason.depth);
             break;
         case RUNPATH:
             printf(" [runpath]");
@@ -430,9 +441,12 @@ int recurse(char *current_file, int depth, found_by reason) {
             printf("\e[1;34m%s", buf + soname_buf_offset);
         else
             printf("\e[1;34m%s", current_file);
-        switch (reason) {
+        switch (reason.how) {
         case RPATH:
-            printf(" [rpath]\e[0m\n");
+            if (reason.depth + 1 == depth)
+                printf(" [rpath]\e[0m\n");
+            else
+                printf(" [rpath of %d]\e[0m\n", reason.depth);
             break;
         case RUNPATH:
             printf(" [runpath]\e[0m\n");
@@ -463,7 +477,9 @@ int recurse(char *current_file, int depth, found_by reason) {
         memcpy(origin, current_file, bytes);
         origin[bytes + 1] = '\0';
     } else {
-        origin[0] = '\0';
+        origin[0] = '.';
+        origin[1] = '/';
+        origin[2] = '\0';
     }
 
     // pointers into the buffer for rpath, soname and needed
@@ -527,9 +543,12 @@ int recurse(char *current_file, int depth, found_by reason) {
         printf("\e[1;36m%s\e[0m", buf + soname_buf_offset);
     else
         printf("\e[1;36m%s\e[0m", current_file);
-    switch (reason) {
+    switch (reason.how) {
     case RPATH:
-        printf(" \e[0;33m[rpath]\e[0m\n");
+        if (reason.depth + 1 == depth)
+            printf(" \e[0;33m[rpath]\e[0m\n");
+        else
+            printf(" \e[0;33m[rpath of %d]\e[0m\n", reason.depth);
         break;
     case RUNPATH:
         printf(" \e[0;33m[runpath]\e[0m\n");
@@ -567,7 +586,9 @@ int recurse(char *current_file, int depth, found_by reason) {
             if (name[0] != '/') {
                 tree_preamble(depth + 1);
                 printf("\e[1;31m%s is not absolute\e[0m\n", name);
-            } else if (recurse(name, depth + 1, DIRECT) != 0) {
+            } else if (recurse(name, depth + 1,
+                               (struct found_t){.how = DIRECT, .depth = 0}) !=
+                       0) {
                 tree_preamble(depth + 1);
                 printf("\e[1;31m%s not found\e[0m\n", name);
             }
@@ -593,8 +614,9 @@ int recurse(char *current_file, int depth, found_by reason) {
             if (needed_not_found == 0)
                 break;
             char *rpaths = buf + rpath_offsets[j];
-            check_search_paths(RPATH, path, rpaths, &needed_not_found,
-                               needed_buf_offsets, depth);
+            check_search_paths((struct found_t){.how = RPATH, .depth = j}, path,
+                               rpaths, &needed_not_found, needed_buf_offsets,
+                               depth);
         }
     }
 
@@ -604,20 +626,22 @@ int recurse(char *current_file, int depth, found_by reason) {
     // Then consider runpaths
     if (runpath != 0xffffffffffffffff) {
         char *runpaths = buf + runpath_buf_offset;
-        check_search_paths(RUNPATH, path, runpaths, &needed_not_found,
-                           needed_buf_offsets, depth);
+        check_search_paths((struct found_t){.how = RUNPATH, .depth = 0}, path,
+                           runpaths, &needed_not_found, needed_buf_offsets,
+                           depth);
     }
 
     if (needed_not_found == 0)
         goto success;
 
     // Check ld.so.conf paths
-    check_search_paths(LD_SO_CONF, path, buf, &needed_not_found,
-                       needed_buf_offsets, depth);
+    check_search_paths((struct found_t){.how = LD_SO_CONF, .depth = 0}, path,
+                       buf, &needed_not_found, needed_buf_offsets, depth);
 
     // Then consider standard paths
-    check_search_paths(DEFAULT, path, default_paths, &needed_not_found,
-                       needed_buf_offsets, depth);
+    check_search_paths((struct found_t){.how = DEFAULT, .depth = 0}, path,
+                       default_paths, &needed_not_found, needed_buf_offsets,
+                       depth);
 
     if (needed_not_found == 0)
         goto success;
@@ -743,7 +767,7 @@ int print_tree(char *path) {
     if (buf_size > 0)
         buf[buf_size - 1] = '\0';
 
-    int code = recurse(path, 0, INPUT);
+    int code = recurse(path, 0, (struct found_t){.how = INPUT, .depth = 0});
 
     free(buf);
 
