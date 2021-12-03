@@ -7,9 +7,8 @@
 #include <glob.h>
 #include <sys/stat.h>
 
-// TODO: LD_LIBRARY_PATH
-// TODO: rpath substitution ${ORIGIN} / $ORIGIN / ${LIB} / $LIB / ${PLATFORM} /
-// $PLATFORM
+// TODO: rpath substitution ${LIB} / $LIB / ${PLATFORM} / $PLATFORM
+//       just have to work out how to get the proper LIB/PLATFORM values.
 
 struct h_64 {
     uint16_t e_type;
@@ -63,7 +62,9 @@ struct dynamic_64 {
 #define ERR_UNSUPPORTED_ELF_FILE 1
 #define ERR_INVALID_HEADER 1
 
-typedef enum { INPUT, DIRECT, RPATH, RUNPATH, LD_SO_CONF, DEFAULT } how_t;
+#define MAX_SIZE_T 0xFFFFFFFFFFFFFFFF
+
+typedef enum { INPUT, DIRECT, RPATH, LD_LIBRARY_PATH, RUNPATH, LD_SO_CONF, DEFAULT } how_t;
 
 struct found_t {
     how_t how;
@@ -95,6 +96,9 @@ struct visited_file {
 // Keep track of the files we've see
 struct visited_file visited_files[128];
 size_t visited_files_count;
+
+// Offset for our parsed LD_LIBRARY_PATH
+size_t ld_library_path_offset;
 
 void tree_preamble(int depth) {
     if (depth == 0)
@@ -280,7 +284,7 @@ int recurse(char *current_file, int depth, struct found_t reason) {
 
     struct ph_64 prog_header;
 
-    uint64_t p_offset = 0xffffffffffffffff;
+    uint64_t p_offset = MAX_SIZE_T;
 
     // map vaddr to file offset
     // TODO: make this dynamic length
@@ -291,8 +295,8 @@ int recurse(char *current_file, int depth, struct found_t reason) {
     uint64_t *addrs_end = &addrs[0];
 
     for (int i = 0; i < 32; ++i) {
-        offsets[i] = 0xffffffffffffffff;
-        addrs[i] = 0xffffffffffffffff;
+        offsets[i] = MAX_SIZE_T;
+        addrs[i] = MAX_SIZE_T;
     }
 
     for (uint64_t i = 0; i < header.e_phnum; ++i) {
@@ -329,7 +333,7 @@ int recurse(char *current_file, int depth, struct found_t reason) {
 
     // No dynamic section? -- let's just assume that is OK for now.
     // we simply print the filename
-    if (p_offset == 0xffffffffffffffff) {
+    if (p_offset == MAX_SIZE_T) {
         for (int i = 0; i < depth; ++i)
             putchar(' ');
         if (should_recurse == 0)
@@ -342,6 +346,9 @@ int recurse(char *current_file, int depth, struct found_t reason) {
                 printf(" [rpath]");
             else
                 printf(" [rpath of %d]", reason.depth);
+            break;
+        case LD_LIBRARY_PATH:
+            printf(" [LD_LIBRARY_PATH]");
             break;
         case RUNPATH:
             printf(" [runpath]");
@@ -364,10 +371,10 @@ int recurse(char *current_file, int depth, struct found_t reason) {
     if (fseek(fptr, p_offset, SEEK_SET) != 0)
         return 10;
 
-    uint64_t strtab = 0xffffffffffffffff;
-    uint64_t rpath = 0xffffffffffffffff;
-    uint64_t runpath = 0xffffffffffffffff;
-    uint64_t soname = 0xffffffffffffffff;
+    uint64_t strtab = MAX_SIZE_T;
+    uint64_t rpath = MAX_SIZE_T;
+    uint64_t runpath = MAX_SIZE_T;
+    uint64_t soname = MAX_SIZE_T;
 
     // Offsets in strtab
     uint64_t neededs[32];
@@ -401,7 +408,7 @@ int recurse(char *current_file, int depth, struct found_t reason) {
         }
     }
 
-    if (strtab == 0xffffffffffffffff)
+    if (strtab == MAX_SIZE_T)
         return 14;
 
     // find the file offset corresponding to the strtab address
@@ -424,7 +431,7 @@ int recurse(char *current_file, int depth, struct found_t reason) {
 
     // Copy the current soname
     size_t soname_buf_offset = buf_size;
-    if (soname != 0xffffffffffffffff) {
+    if (soname != MAX_SIZE_T) {
         if (fseek(fptr, strtab_offset + soname, SEEK_SET) != 0) {
             buf_size = old_buf_size;
             return 16;
@@ -437,7 +444,7 @@ int recurse(char *current_file, int depth, struct found_t reason) {
     // No need too recurse deeper? then there's also no reason to find rpaths.
     if (should_recurse == 0) {
         tree_preamble(depth);
-        if (soname != 0xffffffffffffffff)
+        if (soname != MAX_SIZE_T)
             printf("\e[1;34m%s", buf + soname_buf_offset);
         else
             printf("\e[1;34m%s", current_file);
@@ -447,6 +454,9 @@ int recurse(char *current_file, int depth, struct found_t reason) {
                 printf(" [rpath]\e[0m\n");
             else
                 printf(" [rpath of %d]\e[0m\n", reason.depth);
+            break;
+        case LD_LIBRARY_PATH:
+            printf(" [LD_LIBRARY_PATH]\e[0m\n");
             break;
         case RUNPATH:
             printf(" [runpath]\e[0m\n");
@@ -477,6 +487,7 @@ int recurse(char *current_file, int depth, struct found_t reason) {
         memcpy(origin, current_file, bytes);
         origin[bytes + 1] = '\0';
     } else {
+        // this only happens when the input is relative
         origin[0] = '.';
         origin[1] = '/';
         origin[2] = '\0';
@@ -486,7 +497,7 @@ int recurse(char *current_file, int depth, struct found_t reason) {
     rpath_offsets[depth] = buf_size;
 
     // Copy DT_PRATH
-    if (rpath != 0xffffffffffffffff) {
+    if (rpath != MAX_SIZE_T) {
         if (fseek(fptr, strtab_offset + rpath, SEEK_SET) != 0) {
             buf_size = old_buf_size;
             return 1;
@@ -506,7 +517,7 @@ int recurse(char *current_file, int depth, struct found_t reason) {
 
     // Copy DT_RUNPATH
     size_t runpath_buf_offset = buf_size;
-    if (runpath != 0xffffffffffffffff) {
+    if (runpath != MAX_SIZE_T) {
         if (fseek(fptr, strtab_offset + runpath, SEEK_SET) != 0) {
             buf_size = old_buf_size;
             return 1;
@@ -539,7 +550,7 @@ int recurse(char *current_file, int depth, struct found_t reason) {
     // We have found something, so print it, maybe by soname.
     tree_preamble(depth);
 
-    if (soname != 0xffffffffffffffff)
+    if (soname != MAX_SIZE_T)
         printf("\e[1;36m%s\e[0m", buf + soname_buf_offset);
     else
         printf("\e[1;36m%s\e[0m", current_file);
@@ -549,6 +560,9 @@ int recurse(char *current_file, int depth, struct found_t reason) {
             printf(" \e[0;33m[rpath]\e[0m\n");
         else
             printf(" \e[0;33m[rpath of %d]\e[0m\n", reason.depth);
+        break;
+    case LD_LIBRARY_PATH:
+        printf(" \e[0;33m[LD_LIBRARY_PATH]\e[0m\n");
         break;
     case RUNPATH:
         printf(" \e[0;33m[runpath]\e[0m\n");
@@ -607,7 +621,7 @@ int recurse(char *current_file, int depth, struct found_t reason) {
         goto success;
 
     // Consider rpaths only when runpath is empty
-    if (runpath == 0xffffffffffffffff) {
+    if (runpath == MAX_SIZE_T) {
         // We have a stack of rpaths, try them all, starting with one set at
         // this lib, then the parents.
         for (int j = depth; j >= 0; --j) {
@@ -623,8 +637,20 @@ int recurse(char *current_file, int depth, struct found_t reason) {
     if (needed_not_found == 0)
         goto success;
 
+    // Then try LD_LIBRARY_PATH, if we have it.
+    if (ld_library_path_offset != MAX_SIZE_T) {
+        char * ld_library_paths = buf + ld_library_path_offset;
+        check_search_paths((struct found_t){.how = LD_LIBRARY_PATH, .depth = 0}, path,
+                           ld_library_paths, &needed_not_found, needed_buf_offsets,
+                           depth);
+
+    }
+
+    if (needed_not_found == 0)
+        goto success;
+
     // Then consider runpaths
-    if (runpath != 0xffffffffffffffff) {
+    if (runpath != MAX_SIZE_T) {
         char *runpaths = buf + runpath_buf_offset;
         check_search_paths((struct found_t){.how = RUNPATH, .depth = 0}, path,
                            runpaths, &needed_not_found, needed_buf_offsets,
@@ -753,6 +779,32 @@ int parse_ld_conf(char *path) {
     return 0;
 }
 
+void parse_ld_library_path() {
+    char * LD_LIBRARY_PATH = "LD_LIBRARY_PATH";
+    ld_library_path_offset = MAX_SIZE_T;
+    char * val = getenv(LD_LIBRARY_PATH);
+
+    // not set, so nothing to do.
+    if (val == NULL) return;
+
+    ld_library_path_offset = buf_size;
+
+    // otherwise, we just copy it over and replace ; with :
+    // so that it's similar to rpaths.
+    size_t bytes = strlen(val) + 1;
+
+    // include the \0.
+    memcpy(buf + buf_size, val, bytes);
+
+    // replace ; with :
+    char * search = buf + buf_size;
+
+    while((search = strchr(search, ';')) != NULL)
+        *search++ = ':';
+
+    buf_size += bytes;
+}
+
 int print_tree(char *path) {
     // This is where we store rpaths, sonames, needed, search paths.
     // and yes I should fix buffer overflow issues...
@@ -762,6 +814,7 @@ int print_tree(char *path) {
 
     // First collect standard paths
     parse_ld_conf("/etc/ld.so.conf");
+    parse_ld_library_path();
 
     // Make sure the last colon is replaced with a null.
     if (buf_size > 0)
