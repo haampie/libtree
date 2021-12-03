@@ -82,8 +82,6 @@ struct found_t {
     int depth;
 };
 
-char *default_paths = "/lib:/lib64:/usr/lib:/usr/lib64";
-
 // large buffer in which to copy rpaths, needed libraries and sonames.
 char *buf;
 size_t buf_size;
@@ -105,8 +103,9 @@ struct visited_file {
 struct visited_file visited_files[128];
 size_t visited_files_count;
 
-// Offset for our parsed LD_LIBRARY_PATH
 size_t ld_library_path_offset;
+size_t default_paths_offset;
+size_t ld_so_conf_offset;
 
 void tree_preamble(int depth) {
     if (depth == 0)
@@ -245,6 +244,38 @@ void copy_from_file(FILE *fptr) {
     while ((c = getc(fptr)) != '\0' && c != EOF)
         buf[buf_size++] = c;
     buf[buf_size++] = '\0';
+}
+
+void print_colon_delimited_paths(char *start, char *indent) {
+    while (1) {
+        // Don't print empty string
+        if (*start == '\0')
+            break;
+
+        // Find the next delimiter after start
+        char *next = strchr(start, ':');
+
+        // Don't print empty strings
+        if (start == next) {
+            ++start;
+            continue;
+        }
+
+        // If we have found a :, then replace it with a \0
+        // so that we can use printf.
+        if (next != NULL)
+            *next = '\0';
+
+        printf("%s    %s\n", indent, start);
+
+        // We done yet?
+        if (next == NULL)
+            break;
+
+        // Otherwise put the : back in place and continue.
+        *next = ':';
+        start = next + 1;
+    }
 }
 
 int recurse(char *current_file, int depth, struct found_t reason) {
@@ -639,10 +670,9 @@ int recurse(char *current_file, int depth, struct found_t reason) {
                 break;
             if (rpath_offsets[j] == MAX_SIZE_T)
                 continue;
-            char *rpaths = buf + rpath_offsets[j];
             check_search_paths((struct found_t){.how = RPATH, .depth = j}, path,
-                               rpaths, &needed_not_found, needed_buf_offsets,
-                               depth);
+                               buf + rpath_offsets[j], &needed_not_found,
+                               needed_buf_offsets, depth);
         }
     }
 
@@ -651,10 +681,9 @@ int recurse(char *current_file, int depth, struct found_t reason) {
 
     // Then try LD_LIBRARY_PATH, if we have it.
     if (ld_library_path_offset != MAX_SIZE_T) {
-        char *ld_library_paths = buf + ld_library_path_offset;
         check_search_paths((struct found_t){.how = LD_LIBRARY_PATH, .depth = 0},
-                           path, ld_library_paths, &needed_not_found,
-                           needed_buf_offsets, depth);
+                           path, buf + ld_library_path_offset,
+                           &needed_not_found, needed_buf_offsets, depth);
     }
 
     if (needed_not_found == 0)
@@ -662,10 +691,9 @@ int recurse(char *current_file, int depth, struct found_t reason) {
 
     // Then consider runpaths
     if (runpath != MAX_SIZE_T) {
-        char *runpaths = buf + runpath_buf_offset;
         check_search_paths((struct found_t){.how = RUNPATH, .depth = 0}, path,
-                           runpaths, &needed_not_found, needed_buf_offsets,
-                           depth);
+                           buf + runpath_buf_offset, &needed_not_found,
+                           needed_buf_offsets, depth);
     }
 
     if (needed_not_found == 0)
@@ -673,12 +701,13 @@ int recurse(char *current_file, int depth, struct found_t reason) {
 
     // Check ld.so.conf paths
     check_search_paths((struct found_t){.how = LD_SO_CONF, .depth = 0}, path,
-                       buf, &needed_not_found, needed_buf_offsets, depth);
+                       buf + ld_so_conf_offset, &needed_not_found,
+                       needed_buf_offsets, depth);
 
     // Then consider standard paths
     check_search_paths((struct found_t){.how = DEFAULT, .depth = 0}, path,
-                       default_paths, &needed_not_found, needed_buf_offsets,
-                       depth);
+                       buf + default_paths_offset, &needed_not_found,
+                       needed_buf_offsets, depth);
 
     if (needed_not_found == 0)
         goto success;
@@ -692,7 +721,8 @@ int recurse(char *current_file, int depth, struct found_t reason) {
 
     // If anything was not found, we print the search paths in order they are
     // considered.
-    char *indent = malloc(6 * depth);
+    char *vertical_error_frame = "    \e[1;31m\xe2\x94\x8a\e[0m";
+    char *indent = malloc(6 * (depth - 1) + sizeof(vertical_error_frame));
     char *p = indent;
     for (int i = 0; i < depth - 1; ++i) {
         if (found_all_needed[i]) {
@@ -703,40 +733,44 @@ int recurse(char *current_file, int depth, struct found_t reason) {
             p += 6;
         }
     }
-    strcpy(p, "    ");
+    // dotted | in red
+    strcpy(p, vertical_error_frame);
 
-    printf(
-        "%s\e[1;31m^^^^\e[0m\n%s \e[1;90mThe following paths were considered\n",
-        indent, indent);
+    printf("%s\e[1;90m Paths considered in this order:\n", indent);
 
     // Consider rpaths only when runpath is empty
     if (runpath != MAX_SIZE_T) {
-        printf("%s 1. rpaths [skipped: runpath is used]:\n", indent);
+        printf("%s\e[1;90m 1. rpath is skipped because runpath was set\n",
+               indent);
     } else {
-        printf("%s 1. rpaths:\n", indent);
+        printf("%s\e[1;90m 1. rpath:\n", indent);
+        for (int j = depth; j >= 0; --j) {
+            if (rpath_offsets[j] != MAX_SIZE_T) {
+                printf("%s\e[1;90m    depth %d\n", indent, j);
+                print_colon_delimited_paths(buf + rpath_offsets[j], indent);
+            }
+        }
     }
 
-    for (int j = depth; j >= 0; --j)
-        if (rpath_offsets[j] != MAX_SIZE_T)
-            printf("%s - %s\n", indent, buf + rpath_offsets[j]);
-
     if (ld_library_path_offset == MAX_SIZE_T) {
-        printf("%s 2. LD_LIBRARY_PATH was not set\n", indent);
+        printf("%s\e[1;90m 2. LD_LIBRARY_PATH was not set\n", indent);
     } else {
-        printf("%s 2. LD_LIBRARY_PATH:\n%s    - %s\n", indent, indent,
-               buf + ld_library_path_offset);
+        printf("%s\e[1;90m 2. LD_LIBRARY_PATH:\n", indent);
+        print_colon_delimited_paths(buf + ld_library_path_offset, indent);
     }
 
     if (runpath == MAX_SIZE_T) {
-        printf("%s 3. runpath was not set\n", indent);
+        printf("%s\e[1;90m 3. runpath was not set\n", indent);
     } else {
-        printf("%s 3. runpath:\n%s    - %s\n", indent, indent,
-               buf + runpath_buf_offset);
+        printf("%s\e[1;90m 3. runpath:\n", indent);
+        print_colon_delimited_paths(buf + runpath_buf_offset, indent);
     }
 
-    printf("%s 4. ld.so.conf:\n%s    - %s\n", indent, indent, buf);
-    printf("%s 5. Standard paths:\n%s    - %s\n", indent, indent,
-           default_paths);
+    printf("%s\e[1;90m 4. ld.so.conf:\n", indent);
+    print_colon_delimited_paths(buf + ld_so_conf_offset, indent);
+
+    printf("%s\e[1;90m 5. Standard paths:\n", indent);
+    print_colon_delimited_paths(buf + default_paths_offset, indent);
     printf("\e[0m");
     free(indent);
 
@@ -745,7 +779,7 @@ success:
     return 0;
 }
 
-int parse_ld_conf(char *path);
+int parse_ld_config_file(char *path);
 
 int ld_conf_globbing(char *pattern) {
     glob_t result;
@@ -766,13 +800,13 @@ int ld_conf_globbing(char *pattern) {
     // Otherwise parse the files we've found!
     int code = 0;
     for (size_t i = 0; i < result.gl_pathc; ++i)
-        code |= parse_ld_conf(result.gl_pathv[i]);
+        code |= parse_ld_config_file(result.gl_pathv[i]);
 
     globfree(&result);
     return code;
 }
 
-int parse_ld_conf(char *path) {
+int parse_ld_config_file(char *path) {
     FILE *fptr = fopen(path, "r");
 
     if (fptr == NULL)
@@ -840,6 +874,15 @@ int parse_ld_conf(char *path) {
     return 0;
 }
 
+void parse_ld_so_conf() {
+    ld_so_conf_offset = buf_size;
+    parse_ld_config_file("/etc/ld.so.conf");
+
+    // Replace the last semicolon with a '\0'.
+    if (buf_size > ld_so_conf_offset)
+        buf[buf_size - 1] = '\0';
+}
+
 void parse_ld_library_path() {
     char *LD_LIBRARY_PATH = "LD_LIBRARY_PATH";
     ld_library_path_offset = MAX_SIZE_T;
@@ -866,6 +909,14 @@ void parse_ld_library_path() {
     buf_size += bytes;
 }
 
+void set_default_paths() {
+    default_paths_offset = buf_size;
+    char *default_paths = "/lib:/lib64:/usr/lib:/usr/lib64";
+    size_t bytes = strlen(default_paths) + 1;
+    memcpy(buf + default_paths_offset, default_paths, bytes);
+    buf_size += bytes;
+}
+
 int print_tree(char *path) {
     // This is where we store rpaths, sonames, needed, search paths.
     // and yes I should fix buffer overflow issues...
@@ -874,12 +925,11 @@ int print_tree(char *path) {
     visited_files_count = 0;
 
     // First collect standard paths
-    parse_ld_conf("/etc/ld.so.conf");
+    parse_ld_so_conf();
     parse_ld_library_path();
-
     // Make sure the last colon is replaced with a null.
-    if (buf_size > 0)
-        buf[buf_size - 1] = '\0';
+
+    set_default_paths();
 
     int code = recurse(path, 0, (struct found_t){.how = INPUT, .depth = 0});
 
