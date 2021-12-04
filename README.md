@@ -11,7 +11,7 @@ A tool that:
 ![example](doc/screenshot.png)
 
 ## Installation
-Download the [**latest release**](https://github.com/haampie/libtree/releases) from Github.
+Download the [**latest release**](https://github.com/haampie/libtree/releases) from GitHub.
 
 **Static executable**
 
@@ -73,7 +73,7 @@ man.bundle/
 ```
 
 ## Verbose output
-By default certain standard depenendencies are not shown. For more verbose output use
+By default, certain standard dependencies are not shown. For more verbose output use
 -  `libtree -v $(which man)` to show skipped libraries without their children
 -  `libtree -a $(which apt-get)` to show the full recursive list of libraries
 
@@ -106,6 +106,6 @@ path config by setting `--ldconf mylibs.conf`. Search paths can be added as well
 
 ## Known issues
 - When deploying libs with `libtree app -d folder.bundle --chrpath`, the runpaths are only
-  changed when the binaries already have an an rpath or runpath. This is a limitation of
+  changed when the binaries already have an rpath or runpath. This is a limitation of
   `chrpath`. Another option is to use `patchelf` instead, but this tool is known to break
   binaries sometimes.
