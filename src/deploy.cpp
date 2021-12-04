@@ -1,3 +1,5 @@
+#include <sstream>
+
 #include <libtree/deploy.hpp>
 #include <libtree/exec.hpp>
 
