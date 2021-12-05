@@ -18,8 +18,11 @@ namespace fs = std::filesystem;
 int main(int argc, char ** argv) {
     cxxopts::Options options("libtree", "Show the dependency tree of binaries and optionally bundle them into a single folder.");
 
-#if defined(LIBTREE_HAS_AUXV_HEADER)
+#if defined(LIBTREE_HAS_AUXV_HEADER) && defined(__linux__)
     auto default_platform = reinterpret_cast<char const *>(getauxval(AT_PLATFORM));
+#elif defined(__FreeBSD__)
+    // FreeBSD doesn't put libraries into platform-specific prefixes, so substitution isn't necessary
+    auto default_platform = "";
 #else
     // Default to x86_64 substitution for PLATFORM if getauxval is not available.
     auto default_platform = "x86_64";

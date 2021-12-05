@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 cd "$(dirname "$0")"
 
@@ -9,12 +9,18 @@ if [ $# -ne 1 ]; then
     exit 1
 fi
 
+if [ "$(uname -s)" = "Linux" ]; then
+    DIFF=diff --color
+else
+    DIFF=diff
+fi
+
 # Test without setting LD_LIBRARY_PATH
 TEST_1=`$1 src/main`
 EXPECTED_1=$(cat test_1_out.txt)
 
 if [ "$TEST_1" != "$EXPECTED_1" ]; then
-    diff --color <( echo "$TEST_1" ) <( echo "$EXPECTED_1")
+    $DIFF <( echo "$TEST_1" ) <( echo "$EXPECTED_1")
     exit 1
 fi
 
@@ -23,6 +29,6 @@ TEST_2=`LD_LIBRARY_PATH=$PWD/src/a/b/c $1 src/main`
 EXPECTED_2=$(cat test_2_out.txt)
 
 if [ "$TEST_2" != "$EXPECTED_2" ]; then
-    diff --color <( echo "$TEST_2" ) <( echo "$EXPECTED_2")
+    $DIFF <( echo "$TEST_2" ) <( echo "$EXPECTED_2")
     exit 1
 fi

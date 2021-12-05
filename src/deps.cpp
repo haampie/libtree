@@ -22,6 +22,14 @@ bool is_lib(fs::path const &p) {
     return filename.find("so", idx) == idx + 1;
 }
 
+bool should_skip(std::string name, std::unordered_set<std::string> &exclusions) {
+    auto idx = name.find(".so.");
+    if (idx == std::string::npos)
+        return false;
+    name.erase(idx + 3, std::string::npos);
+    return exclusions.count(name) > 0;
+}
+
 deps::deps(
     std::vector<Elf> &&input, 
     std::vector<fs::path> &&ld_so_conf, 
@@ -79,7 +87,7 @@ std::string deps::get_error_indent(std::vector<bool> const &done) const {
 void deps::explore(Elf const &parent, std::vector<fs::path> &rpaths, std::vector<bool> &done) {
     auto indent = get_indent(done);
     auto cached = m_visited.count(parent.name) > 0;
-    auto excluded = m_skip.count(parent.name) > 0;
+    auto excluded = should_skip(parent.name, m_skip);
 
     std::cout << indent << (excluded ? termcolor::magenta : cached ? termcolor::blue : termcolor::cyan);
     if (!excluded && !cached)
@@ -121,7 +129,7 @@ void deps::explore(Elf const &parent, std::vector<fs::path> &rpaths, std::vector
     for (auto const &lib : parent.needed) {
         auto result = locate(parent, lib, total_rpaths);
 
-        if (m_verbosity == verbosity_t::NONE && result && m_skip.count(result->name) > 0)
+        if (m_verbosity == verbosity_t::NONE && result && should_skip(result->name, m_skip))
             continue;
 
         if (result)
