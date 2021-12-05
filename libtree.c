@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <glob.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 // TODO: rpath substitution ${LIB} / $LIB / ${PLATFORM} / $PLATFORM
 //       just have to work out how to get the proper LIB/PLATFORM values.
@@ -113,21 +114,23 @@ size_t ld_library_path_offset;
 size_t default_paths_offset;
 size_t ld_so_conf_offset;
 
+int color_output = 0;
+
 void tree_preamble(int depth) {
     if (depth == 0)
         return;
 
     for (int i = 0; i < depth - 1; ++i) {
         if (found_all_needed[i])
-            printf("    ");
+            fputs("    ", stdout);
         else
-            printf("\xe2\x94\x82   "); // "│   "
+            fputs("\xe2\x94\x82   ", stdout); // "│   "
     }
 
     if (found_all_needed[depth - 1])
-        printf("\xe2\x94\x94\xe2\x94\x80\xe2\x94\x80 "); // "└── "
+        fputs("\xe2\x94\x94\xe2\x94\x80\xe2\x94\x80 ", stdout); // "└── "
     else
-        printf("\xe2\x94\x9c\xe2\x94\x80\xe2\x94\x80 "); // "├── "
+        fputs("\xe2\x94\x9c\xe2\x94\x80\xe2\x94\x80 ", stdout); // "├── "
 }
 
 int recurse(char *current_file, int depth, struct found_t reason);
@@ -272,7 +275,9 @@ void print_colon_delimited_paths(char *start, char *indent) {
         if (next != NULL)
             *next = '\0';
 
-        printf("%s    %s\n", indent, start);
+        fputs(indent, stdout);
+        fputs("    ", stdout);
+        puts(start);
 
         // We done yet?
         if (next == NULL)
@@ -376,15 +381,14 @@ int recurse(char *current_file, int depth, struct found_t reason) {
     visited_files[visited_files_count].st_ino = finfo.st_ino;
     ++visited_files_count;
 
-    // No dynamic section? -- let's just assume that is OK for now.
-    // we simply print the filename
+    // No dynamic section? (TODO: handle this properly)
     if (p_offset == MAX_SIZE_T) {
-        for (int i = 0; i < depth; ++i)
-            putchar(' ');
-        if (should_recurse == 0)
-            printf("\e[1;36m%s\e[0m", current_file);
-        else
-            printf("\e[1;34m%s\e[0m", current_file);
+        tree_preamble(depth);
+        if (color_output)
+            fputs("\e[1;36m", stdout);
+        fputs(current_file, stdout);
+        if (color_output)
+            fputs("\e[0m \e[0;33m", stdout);
         switch (reason.how) {
         case RPATH:
             if (reason.depth + 1 == depth)
@@ -404,10 +408,9 @@ int recurse(char *current_file, int depth, struct found_t reason) {
         case DIRECT:
             printf(" [direct]");
             break;
-        default:
-            printf("\n");
-            break;
         }
+        if (color_output)
+            fputs("\e[0m", stdout);
         fclose(fptr);
         return 0;
     }
@@ -489,36 +492,42 @@ int recurse(char *current_file, int depth, struct found_t reason) {
     // No need too recurse deeper? then there's also no reason to find rpaths.
     if (should_recurse == 0) {
         tree_preamble(depth);
-        if (soname != MAX_SIZE_T)
-            printf("\e[1;34m%s", buf + soname_buf_offset);
-        else
-            printf("\e[1;34m%s", current_file);
+        if (color_output)
+            fputs("\e[1;34m", stdout);
+        if (soname != MAX_SIZE_T) {
+            fputs(buf + soname_buf_offset, stdout);
+        } else {
+            fputs(current_file, stdout);
+        }
         switch (reason.how) {
         case RPATH:
             if (reason.depth + 1 == depth)
-                printf(" [rpath]\e[0m\n");
+                fputs(" [rpath]", stdout);
             else
-                printf(" [rpath of %d]\e[0m\n", reason.depth);
+                printf(" [rpath of %d]", reason.depth);
             break;
         case LD_LIBRARY_PATH:
-            printf(" [LD_LIBRARY_PATH]\e[0m\n");
+            fputs(" [LD_LIBRARY_PATH]", stdout);
             break;
         case RUNPATH:
-            printf(" [runpath]\e[0m\n");
+            fputs(" [runpath]", stdout);
             break;
         case LD_SO_CONF:
-            printf(" [ld.so.conf]\e[0m\n");
+            fputs(" [ld.so.conf]", stdout);
             break;
         case DIRECT:
-            printf(" [direct]\e[0m\n");
+            fputs(" [direct]", stdout);
             break;
         case DEFAULT:
-            printf(" [default path]\e[0m\n");
+            fputs(" [default path]", stdout);
             break;
         default:
-            printf("\e[0m\n");
             break;
         }
+        if (color_output)
+            fputs("\e[0m\n", stdout);
+        else
+            putchar('\n');
         fclose(fptr);
         goto success;
     }
@@ -597,36 +606,42 @@ int recurse(char *current_file, int depth, struct found_t reason) {
     // We have found something, so print it, maybe by soname.
     tree_preamble(depth);
 
-    if (soname != MAX_SIZE_T)
-        printf("\e[1;36m%s\e[0m", buf + soname_buf_offset);
+    if (color_output)
+        fputs("\e[1;36m", stdout);
+    fputs(soname == MAX_SIZE_T ? current_file : (buf + soname_buf_offset),
+          stdout);
+    if (color_output)
+        fputs("\e[0m \e[0;33m", stdout);
     else
-        printf("\e[1;36m%s\e[0m", current_file);
+        putchar(' ');
     switch (reason.how) {
     case RPATH:
         if (reason.depth + 1 == depth)
-            printf(" \e[0;33m[rpath]\e[0m\n");
+            fputs("[rpath]", stdout);
         else
-            printf(" \e[0;33m[rpath of %d]\e[0m\n", reason.depth);
+            printf("[rpath of %d]", reason.depth);
         break;
     case LD_LIBRARY_PATH:
-        printf(" \e[0;33m[LD_LIBRARY_PATH]\e[0m\n");
+        fputs("[LD_LIBRARY_PATH]", stdout);
         break;
     case RUNPATH:
-        printf(" \e[0;33m[runpath]\e[0m\n");
+        fputs("[runpath]", stdout);
         break;
     case DIRECT:
-        printf(" \e[0;33m[direct]\e[0m\n");
+        fputs("[direct]", stdout);
         break;
     case LD_SO_CONF:
-        printf(" \e[0;33m[ld.so.conf]\e[0m\n");
+        fputs("[ld.so.conf]", stdout);
         break;
     case DEFAULT:
-        printf(" \e[0;33m[default path]\e[0m\n");
-        break;
-    default:
-        printf("\n");
+        fputs("[default path]", stdout);
         break;
     }
+
+    if (color_output)
+        fputs("\e[0m\n", stdout);
+    else
+        putchar('\n');
 
     // Buffer for the full search path
     char path[4096];
@@ -685,12 +700,24 @@ int recurse(char *current_file, int depth, struct found_t reason) {
             found_all_needed[depth] = needed_not_found <= 1;
             if (name[0] != '/') {
                 tree_preamble(depth + 1);
-                printf("\e[1;31m%s is not absolute\e[0m\n", name);
+                if (color_output)
+                    fputs("\e[1;31m", stdout);
+                fputs(name, stdout);
+                fputs(" is not absolute", stdout);
+                if (color_output)
+                    fputs("\e[0m\n", stdout);
+                else
+                    putchar('\n');
             } else if (recurse(name, depth + 1,
                                (struct found_t){.how = DIRECT, .depth = 0}) !=
                        0) {
                 tree_preamble(depth + 1);
-                printf("\e[1;31m%s not found\e[0m\n", name);
+                if (color_output)
+                    fputs("\e[1;31m", stdout);
+                fputs(name, stdout);
+                fputs(" not found", stdout);
+                if (color_output)
+                    fputs("\e[0m\n", stdout);
             }
 
             // Even if not officially found, we mark it as found, cause we
@@ -761,13 +788,23 @@ int recurse(char *current_file, int depth, struct found_t reason) {
     for (size_t i = 0; i < needed_not_found; ++i) {
         found_all_needed[depth] = i + 1 >= needed_not_found;
         tree_preamble(depth + 1);
-        printf("\e[1;31m%s not found\e[0m\n", buf + needed_buf_offsets[i]);
+        if (color_output)
+            fputs("\e[1;31m", stdout);
+        fputs(buf + needed_buf_offsets[i], stdout);
+        fputs(" not found", stdout);
+        if (color_output)
+            fputs("\e[0m\n", stdout);
+        else
+            putchar('\n');
     }
 
     // If anything was not found, we print the search paths in order they are
     // considered.
-    char *vertical_error_frame = "    \e[0;31m\xe2\x94\x8a\e[0m";
-    char *indent = malloc(6 * (depth - 1) + sizeof(vertical_error_frame));
+    char *vertical_error_frame_color = "    \e[0;31m\xe2\x94\x8a\e[0m";
+    char *vertical_error_frame_nocolor = "    \xe2\x94\x8a";
+    char *vertical_error_frame = color_output ? vertical_error_frame_color
+                                              : vertical_error_frame_nocolor;
+    char *indent = malloc(6 * (depth - 1) + strlen(vertical_error_frame));
     char *p = indent;
     for (int i = 0; i < depth - 1; ++i) {
         if (found_all_needed[i]) {
@@ -781,42 +818,74 @@ int recurse(char *current_file, int depth, struct found_t reason) {
     // dotted | in red
     strcpy(p, vertical_error_frame);
 
-    printf("%s\e[0;90m Paths considered in this order:\n", indent);
+    fputs(indent, stdout);
+    if (color_output)
+        fputs("\e[0;90m", stdout);
+    fputs(" Paths considered in this order:\n", stdout);
 
     // Consider rpaths only when runpath is empty
     if (runpath != MAX_SIZE_T) {
-        printf("%s\e[0;90m 1. rpath is skipped because runpath was set\n",
-               indent);
+        fputs(indent, stdout);
+        if (color_output)
+            fputs("\e[0;90m", stdout);
+        fputs(" 1. rpath is skipped because runpath was set\n", stdout);
     } else {
-        printf("%s\e[0;90m 1. rpath:\n", indent);
+        fputs(indent, stdout);
+        if (color_output)
+            fputs("\e[0;90m", stdout);
+        fputs(" 1. rpath:\n", stdout);
         for (int j = depth; j >= 0; --j) {
             if (rpath_offsets[j] != MAX_SIZE_T) {
-                printf("%s\e[1;90m    depth %d\n", indent, j);
+                fputs(indent, stdout);
+                if (color_output)
+                    fputs("\e[0;90m", stdout);
+                printf("    depth %d\n", j);
                 print_colon_delimited_paths(buf + rpath_offsets[j], indent);
             }
         }
     }
 
     if (ld_library_path_offset == MAX_SIZE_T) {
-        printf("%s\e[0;90m 2. LD_LIBRARY_PATH was not set\n", indent);
+        fputs(indent, stdout);
+        if (color_output)
+            fputs("\e[0;90m", stdout);
+        fputs(" 2. LD_LIBRARY_PATH was not set\n", stdout);
     } else {
-        printf("%s\e[0;90m 2. LD_LIBRARY_PATH:\n", indent);
+        fputs(indent, stdout);
+        if (color_output)
+            fputs("\e[0;90m", stdout);
+        fputs(" 2. LD_LIBRARY_PATH:\n", stdout);
         print_colon_delimited_paths(buf + ld_library_path_offset, indent);
     }
 
     if (runpath == MAX_SIZE_T) {
-        printf("%s\e[0;90m 3. runpath was not set\n", indent);
+        fputs(indent, stdout);
+        if (color_output)
+            fputs("\e[0;90m", stdout);
+        fputs(" 3. runpath was not set\n", stdout);
     } else {
-        printf("%s\e[0;90m 3. runpath:\n", indent);
+        fputs(indent, stdout);
+        if (color_output)
+            fputs("\e[0;90m", stdout);
+        fputs(" 3. runpath:\n", stdout);
         print_colon_delimited_paths(buf + runpath_buf_offset, indent);
     }
 
-    printf("%s\e[0;90m 4. ld.so.conf:\n", indent);
+    fputs(indent, stdout);
+    if (color_output)
+        fputs("\e[0;90m", stdout);
+    fputs(" 4. ld.so.conf:\n", stdout);
     print_colon_delimited_paths(buf + ld_so_conf_offset, indent);
 
-    printf("%s\e[0;90m 5. Standard paths:\n", indent);
+    fputs(indent, stdout);
+    if (color_output)
+        fputs("\e[0;90m", stdout);
+    fputs(" 5. Standard paths:\n", stdout);
     print_colon_delimited_paths(buf + default_paths_offset, indent);
-    printf("\e[0m");
+
+    if (color_output)
+        fputs("\e[0m", stdout);
+
     free(indent);
 
 success:
@@ -984,10 +1053,13 @@ int print_tree(char *path) {
 }
 
 int main(int argc, char **argv) {
+    // Enable or disable colors (no-color.com)
+    color_output = getenv("NO_COLOR") == NULL && isatty(fileno(stdout));
+
     for (size_t i = 1; i < argc && argv[i][0] == '-'; i++) {
         switch (argv[i][1]) {
         case 'v':
-            printf("2.1.0\n");
+            puts("2.1.0\n");
             return 0;
         default:
             fprintf(stderr, "Usage: %s [-h] [file...]\n", argv[0]);
