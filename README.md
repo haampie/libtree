@@ -8,5 +8,4 @@ todo:
 - $LIB and $PLATFORM substitution in rpath.
 - 32 bit elf files and byte swapping for non-native endianness.
 - bundling
-- disable color output when !isatty(fileno(stdout)
 
