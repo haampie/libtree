@@ -1,4 +1,6 @@
-CFLAGS := -O2
+ifeq (exists, $(shell [ -e $(CURDIR)/Make.user ] && echo exists ))
+include $(CURDIR)/Make.user
+endif
 
 all: libtree
 
@@ -15,3 +17,4 @@ check: libtree
 
 clean:
 	rm -f *.o libtree
+
