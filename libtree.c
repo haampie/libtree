@@ -10,6 +10,12 @@
 // TODO: rpath substitution ${LIB} / $LIB / ${PLATFORM} / $PLATFORM
 //       just have to work out how to get the proper LIB/PLATFORM values.
 
+// Libraries we do not show by default -- this reduces the verbosity quite a
+// bit.
+char *exclude_list[7] = {"libc.so",     "libpthread.so", "libm.so",
+                         "libgcc_s.so", "libstdc++.so",  "ld-linux-x86-64.so",
+                         "libdl.so"};
+
 struct h_64 {
     uint16_t e_type;
     uint16_t e_machine;
@@ -626,6 +632,45 @@ int recurse(char *current_file, int depth, struct found_t reason) {
     char path[4096];
 
     size_t needed_not_found = needed_count;
+
+    if (needed_not_found == 0)
+        goto success;
+
+    // Skip common libraries (todo: add a flag for this)
+    for (size_t i = 0; i < needed_not_found;) {
+        // Get to the end.
+        char *start = buf + needed_buf_offsets[i];
+        char *end = strrchr(start, '\0');
+
+        // Empty needed string, is that even possible?
+        if (start == end)
+            continue;
+
+        --end;
+
+        // Strip "1234567890." from the right.
+        while (end != start && (*end >= '0' && *end <= '9' || *end == '.')) {
+            --end;
+        }
+
+        // Check if we should skip this one.
+        int skip = 0;
+        for (size_t j = 0; j < sizeof(exclude_list) / sizeof(exclude_list[0]);
+             ++j) {
+            size_t len = strlen(exclude_list[j]);
+            if (strncmp(start, exclude_list[j], len) != 0)
+                continue;
+
+            // If found swap with the last entry
+            size_t tmp = needed_buf_offsets[i];
+            needed_buf_offsets[i] = needed_buf_offsets[needed_not_found - 1];
+            needed_buf_offsets[--needed_not_found] = tmp;
+            skip = 1;
+            break;
+        }
+        if (!skip)
+            ++i;
+    }
 
     if (needed_not_found == 0)
         goto success;
