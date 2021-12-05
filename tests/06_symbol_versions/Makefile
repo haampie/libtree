@@ -12,11 +12,7 @@ LD_LIBRARY_PATH:=
 
 all: check
 
-v1/libx.so: v1.c v1.map
-	mkdir -p $(dir $@)
-	$(CC) -shared -Wl,-soname,$(notdir $@) -o $@ -Wl,--version-script,$(word 2,$^) $<
-
-v2/libx.so: v2.c v2.map
+%/libx.so: %.c %.map
 	mkdir -p $(dir $@)
 	$(CC) -shared -Wl,-soname,$(notdir $@) -o $@ -Wl,--version-script,$(word 2,$^) $<
 
