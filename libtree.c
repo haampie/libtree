@@ -410,7 +410,9 @@ int recurse(char *current_file, int depth, struct found_t reason) {
             break;
         }
         if (color_output)
-            fputs("\e[0m", stdout);
+            fputs("\e[0m\n", stdout);
+        else
+            putchar('\n');
         fclose(fptr);
         return 0;
     }
