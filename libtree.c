@@ -385,10 +385,10 @@ int recurse(char *current_file, int depth, struct found_t reason) {
     if (p_offset == MAX_SIZE_T) {
         tree_preamble(depth);
         if (color_output)
-            fputs("\e[1;36m", stdout);
+            fputs("\033[1;36m", stdout);
         fputs(current_file, stdout);
         if (color_output)
-            fputs("\e[0m \e[0;33m", stdout);
+            fputs("\033[0m \033[0;33m", stdout);
         switch (reason.how) {
         case RPATH:
             if (reason.depth + 1 == depth)
@@ -410,7 +410,7 @@ int recurse(char *current_file, int depth, struct found_t reason) {
             break;
         }
         if (color_output)
-            fputs("\e[0m\n", stdout);
+            fputs("\033[0m\n", stdout);
         else
             putchar('\n');
         fclose(fptr);
@@ -495,7 +495,7 @@ int recurse(char *current_file, int depth, struct found_t reason) {
     if (should_recurse == 0) {
         tree_preamble(depth);
         if (color_output)
-            fputs("\e[1;34m", stdout);
+            fputs("\033[1;34m", stdout);
         if (soname != MAX_SIZE_T) {
             fputs(buf + soname_buf_offset, stdout);
         } else {
@@ -527,7 +527,7 @@ int recurse(char *current_file, int depth, struct found_t reason) {
             break;
         }
         if (color_output)
-            fputs("\e[0m\n", stdout);
+            fputs("\033[0m\n", stdout);
         else
             putchar('\n');
         fclose(fptr);
@@ -609,11 +609,11 @@ int recurse(char *current_file, int depth, struct found_t reason) {
     tree_preamble(depth);
 
     if (color_output)
-        fputs("\e[1;36m", stdout);
+        fputs("\033[1;36m", stdout);
     fputs(soname == MAX_SIZE_T ? current_file : (buf + soname_buf_offset),
           stdout);
     if (color_output)
-        fputs("\e[0m \e[0;33m", stdout);
+        fputs("\033[0m \033[0;33m", stdout);
     else
         putchar(' ');
     switch (reason.how) {
@@ -641,7 +641,7 @@ int recurse(char *current_file, int depth, struct found_t reason) {
     }
 
     if (color_output)
-        fputs("\e[0m\n", stdout);
+        fputs("\033[0m\n", stdout);
     else
         putchar('\n');
 
@@ -703,11 +703,11 @@ int recurse(char *current_file, int depth, struct found_t reason) {
             if (name[0] != '/') {
                 tree_preamble(depth + 1);
                 if (color_output)
-                    fputs("\e[1;31m", stdout);
+                    fputs("\033[1;31m", stdout);
                 fputs(name, stdout);
                 fputs(" is not absolute", stdout);
                 if (color_output)
-                    fputs("\e[0m\n", stdout);
+                    fputs("\033[0m\n", stdout);
                 else
                     putchar('\n');
             } else if (recurse(name, depth + 1,
@@ -715,11 +715,11 @@ int recurse(char *current_file, int depth, struct found_t reason) {
                        0) {
                 tree_preamble(depth + 1);
                 if (color_output)
-                    fputs("\e[1;31m", stdout);
+                    fputs("\033[1;31m", stdout);
                 fputs(name, stdout);
                 fputs(" not found", stdout);
                 if (color_output)
-                    fputs("\e[0m\n", stdout);
+                    fputs("\033[0m\n", stdout);
             }
 
             // Even if not officially found, we mark it as found, cause we
@@ -791,18 +791,18 @@ int recurse(char *current_file, int depth, struct found_t reason) {
         found_all_needed[depth] = i + 1 >= needed_not_found;
         tree_preamble(depth + 1);
         if (color_output)
-            fputs("\e[1;31m", stdout);
+            fputs("\033[1;31m", stdout);
         fputs(buf + needed_buf_offsets[i], stdout);
         fputs(" not found", stdout);
         if (color_output)
-            fputs("\e[0m\n", stdout);
+            fputs("\033[0m\n", stdout);
         else
             putchar('\n');
     }
 
     // If anything was not found, we print the search paths in order they are
     // considered.
-    char *vertical_error_frame_color = "    \e[0;31m\xe2\x94\x8a\e[0m";
+    char *vertical_error_frame_color = "    \033[0;31m\xe2\x94\x8a\033[0m";
     char *vertical_error_frame_nocolor = "    \xe2\x94\x8a";
     char *vertical_error_frame = color_output ? vertical_error_frame_color
                                               : vertical_error_frame_nocolor;
@@ -822,25 +822,25 @@ int recurse(char *current_file, int depth, struct found_t reason) {
 
     fputs(indent, stdout);
     if (color_output)
-        fputs("\e[0;90m", stdout);
+        fputs("\033[0;90m", stdout);
     fputs(" Paths considered in this order:\n", stdout);
 
     // Consider rpaths only when runpath is empty
     if (runpath != MAX_SIZE_T) {
         fputs(indent, stdout);
         if (color_output)
-            fputs("\e[0;90m", stdout);
+            fputs("\033[0;90m", stdout);
         fputs(" 1. rpath is skipped because runpath was set\n", stdout);
     } else {
         fputs(indent, stdout);
         if (color_output)
-            fputs("\e[0;90m", stdout);
+            fputs("\033[0;90m", stdout);
         fputs(" 1. rpath:\n", stdout);
         for (int j = depth; j >= 0; --j) {
             if (rpath_offsets[j] != MAX_SIZE_T) {
                 fputs(indent, stdout);
                 if (color_output)
-                    fputs("\e[0;90m", stdout);
+                    fputs("\033[0;90m", stdout);
                 printf("    depth %d\n", j);
                 print_colon_delimited_paths(buf + rpath_offsets[j], indent);
             }
@@ -850,12 +850,12 @@ int recurse(char *current_file, int depth, struct found_t reason) {
     if (ld_library_path_offset == MAX_SIZE_T) {
         fputs(indent, stdout);
         if (color_output)
-            fputs("\e[0;90m", stdout);
+            fputs("\033[0;90m", stdout);
         fputs(" 2. LD_LIBRARY_PATH was not set\n", stdout);
     } else {
         fputs(indent, stdout);
         if (color_output)
-            fputs("\e[0;90m", stdout);
+            fputs("\033[0;90m", stdout);
         fputs(" 2. LD_LIBRARY_PATH:\n", stdout);
         print_colon_delimited_paths(buf + ld_library_path_offset, indent);
     }
@@ -863,30 +863,30 @@ int recurse(char *current_file, int depth, struct found_t reason) {
     if (runpath == MAX_SIZE_T) {
         fputs(indent, stdout);
         if (color_output)
-            fputs("\e[0;90m", stdout);
+            fputs("\033[0;90m", stdout);
         fputs(" 3. runpath was not set\n", stdout);
     } else {
         fputs(indent, stdout);
         if (color_output)
-            fputs("\e[0;90m", stdout);
+            fputs("\033[0;90m", stdout);
         fputs(" 3. runpath:\n", stdout);
         print_colon_delimited_paths(buf + runpath_buf_offset, indent);
     }
 
     fputs(indent, stdout);
     if (color_output)
-        fputs("\e[0;90m", stdout);
+        fputs("\033[0;90m", stdout);
     fputs(" 4. ld.so.conf:\n", stdout);
     print_colon_delimited_paths(buf + ld_so_conf_offset, indent);
 
     fputs(indent, stdout);
     if (color_output)
-        fputs("\e[0;90m", stdout);
+        fputs("\033[0;90m", stdout);
     fputs(" 5. Standard paths:\n", stdout);
     print_colon_delimited_paths(buf + default_paths_offset, indent);
 
     if (color_output)
-        fputs("\e[0m", stdout);
+        fputs("\033[0m", stdout);
 
     free(indent);
 
