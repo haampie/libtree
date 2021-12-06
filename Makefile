@@ -3,7 +3,7 @@ include $(CURDIR)/Make.user
 endif
 
 # we're using fileno and getline gnu extensions
-LIBTREE_CFLAGS := -O2 -std=gnu99 $(CFLAGS)
+LIBTREE_CFLAGS := -O2 -std=gnu99 -D_FILE_OFFSET_BITS=64 $(CFLAGS)
 
 all: libtree
 
