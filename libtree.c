@@ -1056,7 +1056,7 @@ int print_tree(char *path) {
 
 int main(int argc, char **argv) {
     // Enable or disable colors (no-color.com)
-    color_output = getenv("NO_COLOR") == NULL && isatty(fileno(stdout));
+    color_output = getenv("NO_COLOR") == NULL && isatty(STDOUT_FILENO);
 
     for (size_t i = 1; i < argc && argv[i][0] == '-'; i++) {
         switch (argv[i][1]) {

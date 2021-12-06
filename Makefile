@@ -2,13 +2,16 @@ ifeq (exists, $(shell [ -e $(CURDIR)/Make.user ] && echo exists ))
 include $(CURDIR)/Make.user
 endif
 
+# we're using fileno and getline gnu extensions
+LIBTREE_CFLAGS := -O2 -std=gnu99 $(CFLAGS)
+
 all: libtree
 
-libtree.o: libtree.c
-	$(CC) $(CFLAGS) -c $?
+%.o: %.c
+	$(CC) $(LIBTREE_CFLAGS) -c $?
 
 libtree: libtree.o
-	$(CC) $(CFLAGS) -o $@ $?
+	$(CC) $(LIBTREE_CFLAGS) -o $@ $?
 
 check: libtree
 	for dir in $(wildcard tests/*); do \
