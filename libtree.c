@@ -13,9 +13,20 @@
 
 // Libraries we do not show by default -- this reduces the verbosity quite a
 // bit.
-char *exclude_list[7] = {"libc.so",     "libpthread.so", "libm.so",
-                         "libgcc_s.so", "libstdc++.so",  "ld-linux-x86-64.so",
-                         "libdl.so"};
+char *exclude_list[] = {"libc.so",     "libpthread.so", "libm.so",
+                        "libgcc_s.so", "libstdc++.so",  "ld-linux-x86-64.so",
+                        "libdl.so"};
+
+typedef enum {
+    VERBOSITY_DEFAULT,
+    VERBOSITY_VERBOSE,
+    VERBOSITY_VERY_VERBOSE
+} verbosity_t;
+
+struct libtree_options {
+    verbosity_t verbosity;
+    int path;
+};
 
 inline int host_is_little_endian() {
     int test = 1;
@@ -173,12 +184,13 @@ void tree_preamble(int depth) {
         fputs("\xe2\x94\x9c\xe2\x94\x80\xe2\x94\x80 ", stdout); // "├── "
 }
 
-int recurse(char *current_file, int depth, elf_bits_t bits,
-            struct found_t reason);
+int recurse(char *current_file, int depth, struct libtree_options *opts,
+            elf_bits_t bits, struct found_t reason);
 
 void check_search_paths(struct found_t reason, char *path, char *rpaths,
                         size_t *needed_not_found, size_t needed_buf_offsets[32],
-                        int depth, elf_bits_t bits) {
+                        int depth, struct libtree_options *opts,
+                        elf_bits_t bits) {
     while (*rpaths != '\0') {
         // First remove trailing colons
         for (; *rpaths == ':' && *rpaths != '\0'; ++rpaths) {
@@ -205,7 +217,7 @@ void check_search_paths(struct found_t reason, char *path, char *rpaths,
             // Append the soname.
             strcpy(search_path_end, buf + needed_buf_offsets[i]);
             found_all_needed[depth] = *needed_not_found <= 1;
-            if (recurse(path, depth + 1, bits, reason) == 0) {
+            if (recurse(path, depth + 1, opts, bits, reason) == 0) {
                 // Found it, so swap out the current soname to the back,
                 // and reduce the number of to be found by one.
                 size_t tmp = needed_buf_offsets[i];
@@ -330,8 +342,8 @@ void print_colon_delimited_paths(char *start, char *indent) {
     }
 }
 
-int recurse(char *current_file, int depth, elf_bits_t parent_bits,
-            struct found_t reason) {
+int recurse(char *current_file, int depth, struct libtree_options *opts,
+            elf_bits_t parent_bits, struct found_t reason) {
     FILE *fptr = fopen(current_file, "rb");
     if (fptr == NULL)
         return 1;
@@ -445,18 +457,20 @@ int recurse(char *current_file, int depth, elf_bits_t parent_bits,
         return 54;
     }
 
-    int should_recurse = 1;
+    int seen_before = 0;
     for (size_t i = 0; i < visited_files_count; ++i) {
         if (visited_files[i].st_dev == finfo.st_dev &&
             visited_files[i].st_ino == finfo.st_ino) {
-            should_recurse = 0;
+            seen_before = 1;
             break;
         }
     }
 
-    visited_files[visited_files_count].st_dev = finfo.st_dev;
-    visited_files[visited_files_count].st_ino = finfo.st_ino;
-    ++visited_files_count;
+    if (!seen_before) {
+        visited_files[visited_files_count].st_dev = finfo.st_dev;
+        visited_files[visited_files_count].st_ino = finfo.st_ino;
+        ++visited_files_count;
+    }
 
     // No dynamic section? (TODO: handle this properly)
     if (p_offset == MAX_OFFSET_T) {
@@ -582,12 +596,15 @@ int recurse(char *current_file, int depth, elf_bits_t parent_bits,
         buf[buf_size++] = '\0';
     }
 
-    // No need too recurse deeper? then there's also no reason to find rpaths.
+    // No need to recurse deeper when we aren't in very verbose mode.
+    int should_recurse =
+        opts->verbosity == VERBOSITY_VERY_VERBOSE || !seen_before;
+
     if (should_recurse == 0) {
         tree_preamble(depth);
         if (color_output)
             fputs("\033[1;34m", stdout);
-        if (soname != MAX_OFFSET_T) {
+        if (soname != MAX_OFFSET_T && !opts->path) {
             fputs(buf + soname_buf_offset, stdout);
         } else {
             fputs(current_file, stdout);
@@ -701,7 +718,8 @@ int recurse(char *current_file, int depth, elf_bits_t parent_bits,
 
     if (color_output)
         fputs("\033[1;36m", stdout);
-    fputs(soname == MAX_OFFSET_T ? current_file : (buf + soname_buf_offset),
+    fputs(soname == MAX_OFFSET_T || opts->path ? current_file
+                                               : (buf + soname_buf_offset),
           stdout);
     if (color_output)
         fputs("\033[0m \033[0;33m", stdout);
@@ -744,44 +762,48 @@ int recurse(char *current_file, int depth, elf_bits_t parent_bits,
     if (needed_not_found == 0)
         goto success;
 
-    // Skip common libraries (todo: add a flag for this)
-    for (size_t i = 0; i < needed_not_found;) {
-        // Get to the end.
-        char *start = buf + needed_buf_offsets[i];
-        char *end = strrchr(start, '\0');
+    // Skip common libraries if not in VERBOSE mode.
+    if (opts->verbosity == VERBOSITY_DEFAULT) {
+        for (size_t i = 0; i < needed_not_found;) {
+            // Get to the end.
+            char *start = buf + needed_buf_offsets[i];
+            char *end = strrchr(start, '\0');
 
-        // Empty needed string, is that even possible?
-        if (start == end)
-            continue;
-
-        --end;
-
-        // Strip "1234567890." from the right.
-        while (end != start && (*end >= '0' && *end <= '9' || *end == '.')) {
-            --end;
-        }
-
-        // Check if we should skip this one.
-        int skip = 0;
-        for (size_t j = 0; j < sizeof(exclude_list) / sizeof(exclude_list[0]);
-             ++j) {
-            size_t len = strlen(exclude_list[j]);
-            if (strncmp(start, exclude_list[j], len) != 0)
+            // Empty needed string, is that even possible?
+            if (start == end)
                 continue;
 
-            // If found swap with the last entry
-            size_t tmp = needed_buf_offsets[i];
-            needed_buf_offsets[i] = needed_buf_offsets[needed_not_found - 1];
-            needed_buf_offsets[--needed_not_found] = tmp;
-            skip = 1;
-            break;
-        }
-        if (!skip)
-            ++i;
-    }
+            --end;
 
-    if (needed_not_found == 0)
-        goto success;
+            // Strip "1234567890." from the right.
+            while (end != start &&
+                   (*end >= '0' && *end <= '9' || *end == '.')) {
+                --end;
+            }
+
+            // Check if we should skip this one.
+            int skip = 0;
+            for (size_t j = 0;
+                 j < sizeof(exclude_list) / sizeof(exclude_list[0]); ++j) {
+                size_t len = strlen(exclude_list[j]);
+                if (strncmp(start, exclude_list[j], len) != 0)
+                    continue;
+
+                // If found swap with the last entry
+                size_t tmp = needed_buf_offsets[i];
+                needed_buf_offsets[i] =
+                    needed_buf_offsets[needed_not_found - 1];
+                needed_buf_offsets[--needed_not_found] = tmp;
+                skip = 1;
+                break;
+            }
+            if (!skip)
+                ++i;
+        }
+
+        if (needed_not_found == 0)
+            goto success;
+    }
 
     // First go over absolute paths in needed libs.
     for (size_t i = 0; i < needed_not_found;) {
@@ -801,7 +823,7 @@ int recurse(char *current_file, int depth, elf_bits_t parent_bits,
                     fputs("\033[0m\n", stdout);
                 else
                     putchar('\n');
-            } else if (recurse(name, depth + 1, curr_bits,
+            } else if (recurse(name, depth + 1, opts, curr_bits,
                                (struct found_t){.how = DIRECT, .depth = 0}) !=
                        0) {
                 tree_preamble(depth + 1);
@@ -837,7 +859,7 @@ int recurse(char *current_file, int depth, elf_bits_t parent_bits,
                 continue;
             check_search_paths((struct found_t){.how = RPATH, .depth = j}, path,
                                buf + rpath_offsets[j], &needed_not_found,
-                               needed_buf_offsets, depth, parent_bits);
+                               needed_buf_offsets, depth, opts, parent_bits);
         }
     }
 
@@ -848,7 +870,7 @@ int recurse(char *current_file, int depth, elf_bits_t parent_bits,
     if (ld_library_path_offset != SIZE_MAX) {
         check_search_paths((struct found_t){.how = LD_LIBRARY_PATH, .depth = 0},
                            path, buf + ld_library_path_offset,
-                           &needed_not_found, needed_buf_offsets, depth,
+                           &needed_not_found, needed_buf_offsets, depth, opts,
                            parent_bits);
     }
 
@@ -859,7 +881,7 @@ int recurse(char *current_file, int depth, elf_bits_t parent_bits,
     if (runpath != MAX_OFFSET_T) {
         check_search_paths((struct found_t){.how = RUNPATH, .depth = 0}, path,
                            buf + runpath_buf_offset, &needed_not_found,
-                           needed_buf_offsets, depth, parent_bits);
+                           needed_buf_offsets, depth, opts, parent_bits);
     }
 
     if (needed_not_found == 0)
@@ -868,12 +890,12 @@ int recurse(char *current_file, int depth, elf_bits_t parent_bits,
     // Check ld.so.conf paths
     check_search_paths((struct found_t){.how = LD_SO_CONF, .depth = 0}, path,
                        buf + ld_so_conf_offset, &needed_not_found,
-                       needed_buf_offsets, depth, parent_bits);
+                       needed_buf_offsets, depth, opts, parent_bits);
 
     // Then consider standard paths
     check_search_paths((struct found_t){.how = DEFAULT, .depth = 0}, path,
                        buf + default_paths_offset, &needed_not_found,
-                       needed_buf_offsets, depth, parent_bits);
+                       needed_buf_offsets, depth, opts, parent_bits);
 
     if (needed_not_found == 0)
         goto success;
@@ -1125,7 +1147,7 @@ void set_default_paths() {
     buf_size += bytes;
 }
 
-int print_tree(char *path) {
+int print_tree(int pathc, char **pathv, struct libtree_options *opts) {
     // This is where we store rpaths, sonames, needed, search paths.
     // and yes I should fix buffer overflow issues...
     buf = malloc(16 * 1024);
@@ -1139,8 +1161,12 @@ int print_tree(char *path) {
 
     set_default_paths();
 
-    int code =
-        recurse(path, 0, EITHER, (struct found_t){.how = INPUT, .depth = 0});
+    int code = 0;
+
+    for (int i = 0; i < pathc; ++i) {
+        code |= recurse(pathv[i], 0, opts, EITHER,
+                        (struct found_t){.how = INPUT, .depth = 0});
+    }
 
     free(buf);
 
@@ -1151,21 +1177,93 @@ int main(int argc, char **argv) {
     // Enable or disable colors (no-color.com)
     color_output = getenv("NO_COLOR") == NULL && isatty(STDOUT_FILENO);
 
-    for (size_t i = 1; i < argc && argv[i][0] == '-'; i++) {
-        switch (argv[i][1]) {
-        case 'v':
-            puts("2.1.0\n");
-            return 0;
-        default:
-            fprintf(stderr, "Usage: %s [-h] [file...]\n", argv[0]);
-            return 1;
+    // We want to end up with an array of file names
+    // in argv[1] up to argv[positional-1].
+    int positional = 1;
+
+    // Default values.
+    struct libtree_options opts = {.verbosity = VERBOSITY_DEFAULT, .path = 0};
+
+    int opt_help = 0;
+    int opt_version = 0;
+
+    // After `--` we treat everything as filenames, not flags.
+    int opt_raw = 0;
+
+    for (int i = 1; i < argc; ++i) {
+        char *arg = argv[i];
+
+        // Positional args don't start with - or are `-` literal.
+        if (opt_raw || *arg != '-' || arg[1] == '\0') {
+            argv[positional++] = arg;
+            continue;
+        }
+
+        // Now we're in flag land!
+        ++arg;
+
+        // Long flags
+        if (*arg == '-') {
+            ++arg;
+
+            // Literal '--'
+            if (*arg == '\0') {
+                opt_raw = 1;
+                continue;
+            }
+
+            if (strcmp(arg, "version") == 0) {
+                opt_version = 1;
+            } else if (strcmp(arg, "path") == 0) {
+                opts.path = 1;
+            } else if (strcmp(arg, "verbose") == 0) {
+                opts.verbosity = VERBOSITY_VERBOSE;
+            } else if (strcmp(arg, "help") == 0) {
+                opt_help = 1;
+            } else if (strcmp(arg, "all") == 0) {
+                opts.verbosity = VERBOSITY_VERY_VERBOSE;
+            } else {
+                fprintf(stderr, "Unrecognized flag `--%s`\n", arg);
+                return 1;
+            }
+
+            continue;
+        }
+
+        // Short flags
+        for (; *arg != '\0'; ++arg) {
+            switch (*arg) {
+            case 'h':
+                opt_help = 1;
+                break;
+            case 'p':
+                opts.path = 1;
+                break;
+            case 'v':
+                opts.verbosity = VERBOSITY_VERBOSE;
+                break;
+            case 'a':
+                opts.verbosity = VERBOSITY_VERY_VERBOSE;
+                break;
+            default:
+                fprintf(stderr, "Unrecognized flag `-%c`!\n", *arg);
+                return 1;
+            }
         }
     }
 
-    if (argc == 1) {
-        fprintf(stderr, "Usage: %s [-h] [file...]\n", argv[0]);
-        return 1;
+    ++argv;
+    --positional;
+
+    if (opt_help || !opt_version && positional == 0) {
+        printf("Help instructions!\n");
+        return (positional == 0 && !opt_help) ? 1 : 0;
     }
 
-    return print_tree(argv[1]);
+    if (opt_version) {
+        puts("3.0.0");
+        return 0;
+    }
+
+    return print_tree(positional, argv, &opts);
 }
