@@ -6,6 +6,6 @@ libtree in C
 todo:
 - arg parsing
 - $LIB and $PLATFORM substitution in rpath.
-- 32 bit elf files and byte swapping for non-native endianness.
+- byte swapping for non-native endianness.
 - bundling
 
