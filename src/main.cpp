@@ -1,6 +1,9 @@
-#if defined(LIBTREE_HAS_AUXV_HEADER)
+#if defined(LIBTREE_HAS_AUXV_HEADER) && defined(__linux__)
 #include <sys/auxv.h>
 #endif
+
+#include <sys/utsname.h>
+#include <errno.h>
 
 #include <cxxopts.hpp>
 #include <termcolor/termcolor.hpp>
@@ -18,14 +21,18 @@ namespace fs = std::filesystem;
 int main(int argc, char ** argv) {
     cxxopts::Options options("libtree", "Show the dependency tree of binaries and optionally bundle them into a single folder.");
 
+    struct utsname uts;
+    if (uname(&uts) != 0) {
+        std::cerr << termcolor::bold << termcolor::red << "ERROR: " << termcolor::reset;
+        std::cerr << termcolor::red << strerror(errno) << termcolor::reset << std::endl;
+        return 1;
+    }
+
 #if defined(LIBTREE_HAS_AUXV_HEADER) && defined(__linux__)
     auto default_platform = reinterpret_cast<char const *>(getauxval(AT_PLATFORM));
-#elif defined(__FreeBSD__)
-    // FreeBSD doesn't put libraries into platform-specific prefixes, so substitution isn't necessary
-    auto default_platform = "";
 #else
-    // Default to x86_64 substitution for PLATFORM if getauxval is not available.
-    auto default_platform = "x86_64";
+    // Default to uname-based substitution for PLATFORM if getauxval is not available.
+    auto default_platform = uts.machine;
 #endif
 
     // Use the strip and chrpath that we ship if we can detect them
@@ -47,7 +54,7 @@ int main(int argc, char ** argv) {
       ("d,destination", "OPTIONAL: When a destination is set to a folder, all binaries and their dependencies are copied over", cxxopts::value<std::string>())
       ("strip", "Call strip on binaries when deploying", cxxopts::value<bool>()->default_value("false"))
       ("chrpath", "Call chrpath on binaries when deploying", cxxopts::value<bool>()->default_value("false"));
-    
+
     options.add_options()
         ("h,help", "Print usage")
         ("version", "Print version info");
@@ -71,7 +78,7 @@ int main(int argc, char ** argv) {
                 continue;
 
             auto type = is_lib(fs::canonical(binary)) ? deploy_t::LIBRARY : deploy_t::EXECUTABLE;
-            auto val = from_path(type, found_t::NONE, binary, platform);
+            auto val = from_path(type, found_t::NONE, binary, platform, uts);
             if (val != std::nullopt)
                 pool.push_back(*val);
         }
@@ -110,6 +117,7 @@ int main(int argc, char ** argv) {
         std::move(ld_library_paths),
         std::move(generatedExcludelist),
         platform,
+        uts,
         verbosity,
         print_paths
     };
