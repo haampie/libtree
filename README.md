@@ -8,3 +8,9 @@ todo:
 - byte swapping for non-native endianness.
 - bundling
 
+don't-try-this-at-home install instructions:
+
+```
+curl -Lfs https://raw.githubusercontent.com/haampie/libtree-in-c/master/libtree.c | cc -o libtree -x c -
+```
+
