@@ -22,7 +22,7 @@ struct libtree_options {
     int path;
 };
 
-inline int host_is_little_endian() {
+static inline int host_is_little_endian() {
     int test = 1;
     char *bytes = (char *)&test;
     return bytes[0] == 1;
@@ -161,7 +161,7 @@ size_t visited_files_count;
 
 int color_output = 0;
 
-int is_in_exclude_list(char *soname) {
+static int is_in_exclude_list(char *soname) {
     // Get to the end.
     char *start = soname;
     char *end = strrchr(start, '\0');
@@ -188,7 +188,7 @@ int is_in_exclude_list(char *soname) {
     return 0;
 }
 
-void tree_preamble(int depth) {
+static void tree_preamble(int depth) {
     if (depth == 0)
         return;
 
@@ -205,13 +205,13 @@ void tree_preamble(int depth) {
         fputs("\xe2\x94\x9c\xe2\x94\x80\xe2\x94\x80 ", stdout); // "├── "
 }
 
-int recurse(char *current_file, int depth, struct libtree_options *opts,
-            elf_bits_t bits, struct found_t reason);
+static int recurse(char *current_file, int depth, struct libtree_options *opts,
+                   elf_bits_t bits, struct found_t reason);
 
-void check_search_paths(struct found_t reason, char *path, char *rpaths,
-                        size_t *needed_not_found, size_t needed_buf_offsets[32],
-                        int depth, struct libtree_options *opts,
-                        elf_bits_t bits) {
+static void check_search_paths(struct found_t reason, char *path, char *rpaths,
+                               size_t *needed_not_found,
+                               size_t needed_buf_offsets[32], int depth,
+                               struct libtree_options *opts, elf_bits_t bits) {
     while (*rpaths != '\0') {
         // First remove trailing colons
         for (; *rpaths == ':' && *rpaths != '\0'; ++rpaths) {
@@ -252,8 +252,8 @@ void check_search_paths(struct found_t reason, char *path, char *rpaths,
     }
 }
 
-int interpolate_variables(char *dst, char *src, char *ORIGIN, char *LIB,
-                          char *PLATFORM) {
+static int interpolate_variables(char *dst, char *src, char *ORIGIN, char *LIB,
+                                 char *PLATFORM) {
     // We do *not* write to dst if there is no variable
     // in th src string -- this is a small optimization,
     // cause it's unlikely we find variables (at least,
@@ -321,7 +321,7 @@ int interpolate_variables(char *dst, char *src, char *ORIGIN, char *LIB,
     return 0;
 }
 
-void copy_from_file(FILE *fptr) {
+static void copy_from_file(FILE *fptr) {
     size_t offset = buf_size;
     char c;
     while ((c = getc(fptr)) != '\0' && c != EOF)
@@ -329,7 +329,7 @@ void copy_from_file(FILE *fptr) {
     buf[buf_size++] = '\0';
 }
 
-void print_colon_delimited_paths(char *start, char *indent) {
+static void print_colon_delimited_paths(char *start, char *indent) {
     while (1) {
         // Don't print empty string
         if (*start == '\0')
@@ -363,8 +363,8 @@ void print_colon_delimited_paths(char *start, char *indent) {
     }
 }
 
-int recurse(char *current_file, int depth, struct libtree_options *opts,
-            elf_bits_t parent_bits, struct found_t reason) {
+static int recurse(char *current_file, int depth, struct libtree_options *opts,
+                   elf_bits_t parent_bits, struct found_t reason) {
     FILE *fptr = fopen(current_file, "rb");
     if (fptr == NULL)
         return 1;
@@ -1016,9 +1016,9 @@ success:
     return 0;
 }
 
-int parse_ld_config_file(char *path);
+static int parse_ld_config_file(char *path);
 
-int ld_conf_globbing(char *pattern) {
+static int ld_conf_globbing(char *pattern) {
     glob_t result;
     memset(&result, 0, sizeof(result));
     int status = glob(pattern, 0, NULL, &result);
@@ -1043,7 +1043,7 @@ int ld_conf_globbing(char *pattern) {
     return code;
 }
 
-int parse_ld_config_file(char *path) {
+static int parse_ld_config_file(char *path) {
     FILE *fptr = fopen(path, "r");
 
     if (fptr == NULL)
@@ -1111,7 +1111,7 @@ int parse_ld_config_file(char *path) {
     return 0;
 }
 
-void parse_ld_so_conf() {
+static void parse_ld_so_conf() {
     ld_so_conf_offset = buf_size;
     parse_ld_config_file("/etc/ld.so.conf");
 
@@ -1120,7 +1120,7 @@ void parse_ld_so_conf() {
         buf[buf_size - 1] = '\0';
 }
 
-void parse_ld_library_path() {
+static void parse_ld_library_path() {
     char *LD_LIBRARY_PATH = "LD_LIBRARY_PATH";
     ld_library_path_offset = SIZE_MAX;
     char *val = getenv(LD_LIBRARY_PATH);
@@ -1146,7 +1146,7 @@ void parse_ld_library_path() {
     buf_size += bytes;
 }
 
-void set_default_paths() {
+static void set_default_paths() {
     default_paths_offset = buf_size;
     char *default_paths = "/lib:/lib64:/usr/lib:/usr/lib64";
     size_t bytes = strlen(default_paths) + 1;
@@ -1154,7 +1154,7 @@ void set_default_paths() {
     buf_size += bytes;
 }
 
-int print_tree(int pathc, char **pathv, struct libtree_options *opts) {
+static int print_tree(int pathc, char **pathv, struct libtree_options *opts) {
     // This is where we store rpaths, sonames, needed, search paths.
     // and yes I should fix buffer overflow issues...
     buf = malloc(16 * 1024);
