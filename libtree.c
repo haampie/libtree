@@ -13,18 +13,12 @@
 
 // Libraries we do not show by default -- this reduces the verbosity quite a
 // bit.
-char *exclude_list[] = {"libc.so",     "libpthread.so", "libm.so",
-                        "libgcc_s.so", "libstdc++.so",  "ld-linux-x86-64.so",
-                        "libdl.so"};
-
-typedef enum {
-    VERBOSITY_DEFAULT,
-    VERBOSITY_VERBOSE,
-    VERBOSITY_VERY_VERBOSE
-} verbosity_t;
+char const *exclude_list[] = {
+    "libc.so",      "libpthread.so",      "libm.so", "libgcc_s.so",
+    "libstdc++.so", "ld-linux-x86-64.so", "libdl.so"};
 
 struct libtree_options {
-    verbosity_t verbosity;
+    int verbosity;
     int path;
 };
 
@@ -166,6 +160,33 @@ struct visited_file visited_files[128];
 size_t visited_files_count;
 
 int color_output = 0;
+
+int is_in_exclude_list(char * soname) {
+    // Get to the end.
+    char *start = soname;
+    char *end = strrchr(start, '\0');
+
+    // Empty needed string, is that even possible?
+    if (start == end)
+        return 0;
+
+    --end;
+
+    // Strip "1234567890." from the right.
+    while (end != start && (*end >= '0' && *end <= '9' || *end == '.')) {
+        --end;
+    }
+
+    // Check if we should skip this one.
+    for (size_t j = 0; j < sizeof(exclude_list) / sizeof(char *); ++j) {
+        size_t len = strlen(exclude_list[j]);
+        if (strncmp(start, exclude_list[j], len) != 0)
+            continue;
+        return 1;
+    }
+
+    return 0;
+}
 
 void tree_preamble(int depth) {
     if (depth == 0)
@@ -596,14 +617,17 @@ int recurse(char *current_file, int depth, struct libtree_options *opts,
         buf[buf_size++] = '\0';
     }
 
-    // No need to recurse deeper when we aren't in very verbose mode.
-    int should_recurse =
-        opts->verbosity == VERBOSITY_VERY_VERBOSE || !seen_before;
+    int in_exclude_list = soname != MAX_OFFSET_T && is_in_exclude_list(buf + soname_buf_offset);
 
-    if (should_recurse == 0) {
+    // No need to recurse deeper when we aren't in very verbose mode.
+    int should_recurse = (!seen_before && !in_exclude_list) ||
+                         (!seen_before && in_exclude_list && opts->verbosity >= 2) ||
+                         opts->verbosity == 3;
+
+    if (!should_recurse) {
         tree_preamble(depth);
         if (color_output)
-            fputs("\033[1;34m", stdout);
+            fputs(in_exclude_list ? "\033[0;35m" : "\033[0;34m", stdout);
         if (soname != MAX_OFFSET_T && !opts->path) {
             fputs(buf + soname_buf_offset, stdout);
         } else {
@@ -717,12 +741,15 @@ int recurse(char *current_file, int depth, struct libtree_options *opts,
     tree_preamble(depth);
 
     if (color_output)
-        fputs("\033[1;36m", stdout);
+        fputs(in_exclude_list ? "\033[0;35m" : seen_before ? "\033[0;34m" : "\033[1;36m", stdout);
+
     fputs(soname == MAX_OFFSET_T || opts->path ? current_file
                                                : (buf + soname_buf_offset),
           stdout);
-    if (color_output)
-        fputs("\033[0m \033[0;33m", stdout);
+
+    // Highlight how it was found
+    if (color_output && !(seen_before || in_exclude_list))
+        fputs("\033[0m \033[33m", stdout);
     else
         putchar(' ');
     switch (reason.how) {
@@ -762,43 +789,18 @@ int recurse(char *current_file, int depth, struct libtree_options *opts,
     if (needed_not_found == 0)
         goto success;
 
-    // Skip common libraries if not in VERBOSE mode.
-    if (opts->verbosity == VERBOSITY_DEFAULT) {
+    // Skip common libraries if not verbose
+    if (opts->verbosity == 0) {
         for (size_t i = 0; i < needed_not_found;) {
-            // Get to the end.
-            char *start = buf + needed_buf_offsets[i];
-            char *end = strrchr(start, '\0');
-
-            // Empty needed string, is that even possible?
-            if (start == end)
-                continue;
-
-            --end;
-
-            // Strip "1234567890." from the right.
-            while (end != start &&
-                   (*end >= '0' && *end <= '9' || *end == '.')) {
-                --end;
-            }
-
-            // Check if we should skip this one.
-            int skip = 0;
-            for (size_t j = 0;
-                 j < sizeof(exclude_list) / sizeof(exclude_list[0]); ++j) {
-                size_t len = strlen(exclude_list[j]);
-                if (strncmp(start, exclude_list[j], len) != 0)
-                    continue;
-
-                // If found swap with the last entry
+            // If in exclude list, swap to the back.
+            if (is_in_exclude_list(buf + needed_buf_offsets[i])) {
                 size_t tmp = needed_buf_offsets[i];
-                needed_buf_offsets[i] =
-                    needed_buf_offsets[needed_not_found - 1];
+                needed_buf_offsets[i] = needed_buf_offsets[needed_not_found - 1];
                 needed_buf_offsets[--needed_not_found] = tmp;
-                skip = 1;
-                break;
-            }
-            if (!skip)
+                continue;
+            } else {
                 ++i;
+            }
         }
 
         if (needed_not_found == 0)
@@ -859,7 +861,7 @@ int recurse(char *current_file, int depth, struct libtree_options *opts,
                 continue;
             check_search_paths((struct found_t){.how = RPATH, .depth = j}, path,
                                buf + rpath_offsets[j], &needed_not_found,
-                               needed_buf_offsets, depth, opts, parent_bits);
+                               needed_buf_offsets, depth, opts, curr_bits);
         }
     }
 
@@ -871,7 +873,7 @@ int recurse(char *current_file, int depth, struct libtree_options *opts,
         check_search_paths((struct found_t){.how = LD_LIBRARY_PATH, .depth = 0},
                            path, buf + ld_library_path_offset,
                            &needed_not_found, needed_buf_offsets, depth, opts,
-                           parent_bits);
+                           curr_bits);
     }
 
     if (needed_not_found == 0)
@@ -881,7 +883,7 @@ int recurse(char *current_file, int depth, struct libtree_options *opts,
     if (runpath != MAX_OFFSET_T) {
         check_search_paths((struct found_t){.how = RUNPATH, .depth = 0}, path,
                            buf + runpath_buf_offset, &needed_not_found,
-                           needed_buf_offsets, depth, opts, parent_bits);
+                           needed_buf_offsets, depth, opts, curr_bits);
     }
 
     if (needed_not_found == 0)
@@ -890,12 +892,12 @@ int recurse(char *current_file, int depth, struct libtree_options *opts,
     // Check ld.so.conf paths
     check_search_paths((struct found_t){.how = LD_SO_CONF, .depth = 0}, path,
                        buf + ld_so_conf_offset, &needed_not_found,
-                       needed_buf_offsets, depth, opts, parent_bits);
+                       needed_buf_offsets, depth, opts, curr_bits);
 
     // Then consider standard paths
     check_search_paths((struct found_t){.how = DEFAULT, .depth = 0}, path,
                        buf + default_paths_offset, &needed_not_found,
-                       needed_buf_offsets, depth, opts, parent_bits);
+                       needed_buf_offsets, depth, opts, curr_bits);
 
     if (needed_not_found == 0)
         goto success;
@@ -1182,7 +1184,7 @@ int main(int argc, char **argv) {
     int positional = 1;
 
     // Default values.
-    struct libtree_options opts = {.verbosity = VERBOSITY_DEFAULT, .path = 0};
+    struct libtree_options opts = {.verbosity = 0, .path = 0};
 
     int opt_help = 0;
     int opt_version = 0;
@@ -1217,11 +1219,9 @@ int main(int argc, char **argv) {
             } else if (strcmp(arg, "path") == 0) {
                 opts.path = 1;
             } else if (strcmp(arg, "verbose") == 0) {
-                opts.verbosity = VERBOSITY_VERBOSE;
+                ++opts.verbosity;
             } else if (strcmp(arg, "help") == 0) {
                 opt_help = 1;
-            } else if (strcmp(arg, "all") == 0) {
-                opts.verbosity = VERBOSITY_VERY_VERBOSE;
             } else {
                 fprintf(stderr, "Unrecognized flag `--%s`\n", arg);
                 return 1;
@@ -1240,10 +1240,7 @@ int main(int argc, char **argv) {
                 opts.path = 1;
                 break;
             case 'v':
-                opts.verbosity = VERBOSITY_VERBOSE;
-                break;
-            case 'a':
-                opts.verbosity = VERBOSITY_VERY_VERBOSE;
+                ++opts.verbosity;
                 break;
             default:
                 fprintf(stderr, "Unrecognized flag `-%c`!\n", *arg);
@@ -1255,9 +1252,48 @@ int main(int argc, char **argv) {
     ++argv;
     --positional;
 
+    // Print a help message on -h, --help or no positional args.
     if (opt_help || !opt_version && positional == 0) {
-        printf("Help instructions!\n");
-        return (positional == 0 && !opt_help) ? 1 : 0;
+        // clang-format off
+        fputs("Show the dynamic dependency tree of ELF files\n"
+              "Usage: libtree [OPTION]... [FILE]...\n"
+              "\n"
+              "  -h, --help     Print help info\n"
+              "      --version  Print version info\n"
+              "\n"
+              "File names starting with '-', for example '-.so', can be specified as follows:\n"
+              "  libtree -- -.so\n"
+              "\n"
+              "A. Locating libs options:\n"
+              "  -p, --path     Show the path of libraries instead of the soname\n"
+              "  -v             Show libraries skipped by default*\n"
+              "  -vv            Show dependencies of libraries skipped by default*\n"
+              "  -vvv           Show dependencies of already encountered libraries\n"
+              "\n"
+              "*) For brevity, the following libraries are not shown by default:\n"
+              "   ",
+              stdout);
+        // clang-format on
+
+        // Print a comma separated list of skipped libraries,
+        // with some new lines every now and then to make it readable.
+        size_t num_excluded = sizeof(exclude_list) / sizeof(char *);
+
+        size_t cursor_x = 4;
+        for (size_t j = 0; j < num_excluded; ++j) {
+            cursor_x += strlen(exclude_list[j]);
+            if (cursor_x > 60) {
+                cursor_x = 4;
+                fputs("\n   ", stdout);
+            }
+            fputs(exclude_list[j], stdout);
+            if (j + 1 != num_excluded)
+                fputs(", ", stdout);
+        }
+        fputs(".\n", stdout);
+
+        // Return an error status code if no positional args were passed.
+        return !opt_help;
     }
 
     if (opt_version) {
