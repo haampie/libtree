@@ -173,7 +173,7 @@ static int is_in_exclude_list(char *soname) {
     --end;
 
     // Strip "1234567890." from the right.
-    while (end != start && (*end >= '0' && *end <= '9' || *end == '.')) {
+    while (end != start && ((*end >= '0' && *end <= '9') || *end == '.')) {
         --end;
     }
 
@@ -322,7 +322,6 @@ static int interpolate_variables(char *dst, char *src, char *ORIGIN, char *LIB,
 }
 
 static void copy_from_file(FILE *fptr) {
-    size_t offset = buf_size;
     char c;
     while ((c = getc(fptr)) != '\0' && c != EOF)
         buf[buf_size++] = c;
@@ -519,6 +518,11 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
             break;
         case DIRECT:
             printf(" [direct]");
+            break;
+        case DEFAULT:
+            printf(" [default path]");
+            break;
+        case INPUT:
             break;
         }
         if (color_output)
@@ -777,6 +781,8 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
         break;
     case DEFAULT:
         fputs("[default path]", stdout);
+        break;
+    case INPUT:
         break;
     }
 
@@ -1258,7 +1264,7 @@ int main(int argc, char **argv) {
     --positional;
 
     // Print a help message on -h, --help or no positional args.
-    if (opt_help || !opt_version && positional == 0) {
+    if (opt_help || (!opt_version && positional == 0)) {
         // clang-format off
         fputs("Show the dynamic dependency tree of ELF files\n"
               "Usage: libtree [OPTION]... [FILE]...\n"
