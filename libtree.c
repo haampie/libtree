@@ -161,7 +161,7 @@ size_t visited_files_count;
 
 int color_output = 0;
 
-int is_in_exclude_list(char * soname) {
+int is_in_exclude_list(char *soname) {
     // Get to the end.
     char *start = soname;
     char *end = strrchr(start, '\0');
@@ -617,12 +617,14 @@ int recurse(char *current_file, int depth, struct libtree_options *opts,
         buf[buf_size++] = '\0';
     }
 
-    int in_exclude_list = soname != MAX_OFFSET_T && is_in_exclude_list(buf + soname_buf_offset);
+    int in_exclude_list =
+        soname != MAX_OFFSET_T && is_in_exclude_list(buf + soname_buf_offset);
 
     // No need to recurse deeper when we aren't in very verbose mode.
-    int should_recurse = (!seen_before && !in_exclude_list) ||
-                         (!seen_before && in_exclude_list && opts->verbosity >= 2) ||
-                         opts->verbosity == 3;
+    int should_recurse =
+        (!seen_before && !in_exclude_list) ||
+        (!seen_before && in_exclude_list && opts->verbosity >= 2) ||
+        opts->verbosity == 3;
 
     if (!should_recurse) {
         tree_preamble(depth);
@@ -741,7 +743,9 @@ int recurse(char *current_file, int depth, struct libtree_options *opts,
     tree_preamble(depth);
 
     if (color_output)
-        fputs(in_exclude_list ? "\033[0;35m" : seen_before ? "\033[0;34m" : "\033[1;36m", stdout);
+        fputs(in_exclude_list ? "\033[0;35m"
+                              : seen_before ? "\033[0;34m" : "\033[1;36m",
+              stdout);
 
     fputs(soname == MAX_OFFSET_T || opts->path ? current_file
                                                : (buf + soname_buf_offset),
@@ -795,7 +799,8 @@ int recurse(char *current_file, int depth, struct libtree_options *opts,
             // If in exclude list, swap to the back.
             if (is_in_exclude_list(buf + needed_buf_offsets[i])) {
                 size_t tmp = needed_buf_offsets[i];
-                needed_buf_offsets[i] = needed_buf_offsets[needed_not_found - 1];
+                needed_buf_offsets[i] =
+                    needed_buf_offsets[needed_not_found - 1];
                 needed_buf_offsets[--needed_not_found] = tmp;
                 continue;
             } else {
