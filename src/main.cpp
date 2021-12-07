@@ -35,6 +35,12 @@ int main(int argc, char ** argv) {
     auto default_platform = uts.machine;
 #endif
 
+#if defined(__FreeBSD__)
+    auto default_ldconf = "/etc/ld-elf.so.conf";
+#else
+    auto default_ldconf = "/etc/ld.so.conf";
+#endif
+
     // Use the strip and chrpath that we ship if we can detect them
     std::string strip = "strip";
     std::string chrpath = "chrpath";
@@ -45,7 +51,7 @@ int main(int argc, char ** argv) {
       ("p,path", "Show the path of libraries instead of their SONAME", cxxopts::value<bool>()->default_value("false"))
       ("v,verbose", "Show the skipped libraries without their children", cxxopts::value<bool>()->default_value("false"))
       ("a,all", "Show the skipped libraries and their children", cxxopts::value<bool>()->default_value("false"))
-      ("l,ldconf", "Path to custom ld.conf to test settings", cxxopts::value<std::string>()->default_value("/etc/ld.so.conf"))
+      ("l,ldconf", "Path to custom ld.conf to test settings", cxxopts::value<std::string>()->default_value(default_ldconf))
       ("s,skip", "Skip library and its dependencies from being deployed or inspected", cxxopts::value<std::vector<std::string>>())
       ("platform", "Platform used for interpolation in rpaths", cxxopts::value<std::string>()->default_value(default_platform))
       ("b,binary", "Binary to inspect", cxxopts::value<std::vector<std::string>>());
