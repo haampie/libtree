@@ -77,7 +77,7 @@ std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path path_str
     if (!elf.load(path_str.string()))
         return std::nullopt;
 
-    auto elf_type = elf.get_class() == ELFCLASS64 ? elf_type_t::ELF_64 
+    auto elf_type = elf.get_class() == ELFIO::ELFCLASS64 ? elf_type_t::ELF_64 
                                                   : elf_type_t::ELF_32;
 
     // Check for mismatch between 64 and 32 bit ELF files.
@@ -87,7 +87,7 @@ std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path path_str
     // Loop over the sections
     for (ELFIO::Elf_Half i = 0; i < elf.sections.size(); ++i) {
         ELFIO::section* sec = elf.sections[i];
-        if ( SHT_DYNAMIC != sec->get_type() )
+        if ( ELFIO::SHT_DYNAMIC != sec->get_type() )
             continue;
 
         ELFIO::dynamic_section_accessor dynamic(elf, sec);
@@ -104,17 +104,17 @@ std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path path_str
             std::string str;
             dynamic.get_entry(i, tag, value, str);
 
-            if (tag == DT_NEEDED) {
+            if (tag == ELFIO::DT_NEEDED) {
                 needed.push_back(str);
-            } else if (tag == DT_RUNPATH) {
+            } else if (tag == ELFIO::DT_RUNPATH) {
                 for (auto const &path : split_paths(str))
                     runpaths.push_back(apply_substitutions(path, cwd, elf_type, platform));
-            } else if (tag == DT_RPATH) {
+            } else if (tag == ELFIO::DT_RPATH) {
                 for (auto const &path : split_paths(str))
                     rpaths.push_back(apply_substitutions(path, cwd, elf_type, platform));
-            } else if (tag == DT_SONAME) {
+            } else if (tag == ELFIO::DT_SONAME) {
                 name = str;
-            } else if (tag == DT_NULL) {
+            } else if (tag == ELFIO::DT_NULL) {
                 break;
             }
         }

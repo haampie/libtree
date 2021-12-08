@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <optional>
 #include <unordered_set>
+#include <iterator>
 
 template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
