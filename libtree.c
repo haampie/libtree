@@ -546,6 +546,106 @@ static void print_line(int depth, char *name, char *color, int highlight,
         putchar('\n');
 }
 
+static void print_error(int depth, size_t needed_not_found,
+                        struct small_vec_u64 *needed_buf_offsets,
+                        char *runpath) {
+    for (size_t i = 0; i < needed_not_found; ++i) {
+        tree_preamble(depth + 1);
+        if (color_output)
+            fputs(BOLD_RED, stdout);
+        fputs(buf + needed_buf_offsets->p[i], stdout);
+        fputs(color_output ? " not found" CLEAR "\n" : " not found\n", stdout);
+    }
+
+    // If anything was not found, we print the search paths in order they
+    // are considered.
+    char *box_vertical =
+        color_output
+            ? JUST_INDENT REGULAR_RED LIGHT_QUADRUPLE_DASH_VERTICAL CLEAR
+            : JUST_INDENT LIGHT_QUADRUPLE_DASH_VERTICAL;
+    char *indent = malloc(sizeof(LIGHT_VERTICAL_WITH_INDENT) * depth +
+                          strlen(box_vertical) + 1);
+    char *p = indent;
+    for (int i = 0; i < depth; ++i) {
+        if (found_all_needed[i]) {
+            int len = sizeof(JUST_INDENT) - 1;
+            memcpy(p, JUST_INDENT, len);
+            p += len;
+        } else {
+            int len = sizeof(LIGHT_VERTICAL_WITH_INDENT) - 1;
+            memcpy(p, LIGHT_VERTICAL_WITH_INDENT, len);
+            p += len;
+        }
+    }
+    // dotted | in red
+    strcpy(p, box_vertical);
+
+    fputs(indent, stdout);
+    if (color_output)
+        fputs(BRIGHT_BLACK, stdout);
+    fputs(" Paths considered in this order:\n", stdout);
+
+    // Consider rpaths only when runpath is empty
+    fputs(indent, stdout);
+    if (runpath != NULL) {
+        if (color_output)
+            fputs(BRIGHT_BLACK, stdout);
+        fputs(" 1. rpath is skipped because runpath was set\n", stdout);
+    } else {
+        fputs(color_output ? BRIGHT_BLACK " 1. rpath:" CLEAR "\n"
+                           : " 1. rpath:",
+              stdout);
+        for (int j = depth; j >= 0; --j) {
+            if (rpath_offsets[j] != SIZE_MAX) {
+                fputs(indent, stdout);
+                if (color_output)
+                    fputs(BRIGHT_BLACK, stdout);
+                printf("    depth %d\n", j);
+                print_colon_delimited_paths(buf + rpath_offsets[j], indent);
+            }
+        }
+    }
+
+    fputs(indent, stdout);
+    if (ld_library_path_offset == SIZE_MAX) {
+        fputs(color_output ? BRIGHT_BLACK
+                  " 2. LD_LIBRARY_PATH was not set" CLEAR "\n"
+                           : " 2. LD_LIBRARY_PATH was not set\n",
+              stdout);
+    } else {
+        fputs(color_output ? BRIGHT_BLACK " 2. LD_LIBRARY_PATH:" CLEAR "\n"
+                           : " 2. LD_LIBRARY_PATH:\n",
+              stdout);
+        print_colon_delimited_paths(buf + ld_library_path_offset, indent);
+    }
+
+    fputs(indent, stdout);
+    if (runpath == NULL) {
+        fputs(color_output ? BRIGHT_BLACK " 3. runpath was not set" CLEAR "\n"
+                           : " 3. runpath was not set\n",
+              stdout);
+    } else {
+        fputs(color_output ? BRIGHT_BLACK " 3. runpath:" CLEAR "\n"
+                           : " 3. runpath:\n",
+              stdout);
+        print_colon_delimited_paths(runpath, indent);
+    }
+
+    fputs(indent, stdout);
+    fputs(color_output ? BRIGHT_BLACK " 4. ld.so.conf:" CLEAR "\n"
+                       : " 4. ld.so.conf:\n",
+          stdout);
+    print_colon_delimited_paths(buf + ld_so_conf_offset, indent);
+
+    fputs(indent, stdout);
+    fputs(color_output ? BRIGHT_BLACK " 5. Standard paths:" CLEAR "\n"
+                       : " 5. Standard paths:\n",
+          stdout);
+    print_colon_delimited_paths(buf + default_paths_offset, indent);
+
+    free(indent);
+}
+
 static int recurse(char *current_file, int depth, struct libtree_options *opts,
                    elf_bits_t parent_bits, struct found_t reason) {
     FILE *fptr = fopen(current_file, "rb");
@@ -1053,111 +1153,9 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
 
     // Finally summarize those that could not be found.
     if (needed_not_found) {
-        for (size_t i = 0; i < needed_not_found; ++i) {
-            found_all_needed[depth] = i + 1 >= needed_not_found;
-            tree_preamble(depth + 1);
-            if (color_output)
-                fputs(BOLD_RED, stdout);
-            fputs(buf + needed_buf_offsets.p[i], stdout);
-            fputs(" not found", stdout);
-            if (color_output)
-                fputs(CLEAR "\n", stdout);
-            else
-                putchar('\n');
-        }
-
-        // If anything was not found, we print the search paths in order they
-        // are considered.
-        char *box_vertical =
-            color_output
-                ? REGULAR_RED JUST_INDENT LIGHT_QUADRUPLE_DASH_VERTICAL CLEAR
-                : JUST_INDENT LIGHT_QUADRUPLE_DASH_VERTICAL;
-        char *indent = malloc(sizeof(LIGHT_VERTICAL_WITH_INDENT) * depth +
-                              strlen(box_vertical) + 1);
-        char *p = indent;
-        for (int i = 0; i < depth - 1; ++i) {
-            if (found_all_needed[i]) {
-                int len = sizeof(JUST_INDENT) - 1;
-                memcpy(p, JUST_INDENT, len);
-                p += len;
-            } else {
-                int len = sizeof(LIGHT_VERTICAL_WITH_INDENT) - 1;
-                memcpy(p, LIGHT_VERTICAL_WITH_INDENT, len);
-                p += len;
-            }
-        }
-        // dotted | in red
-        strcpy(p, box_vertical);
-
-        fputs(indent, stdout);
-        if (color_output)
-            fputs(BRIGHT_BLACK, stdout);
-        fputs(" Paths considered in this order:\n", stdout);
-
-        // Consider rpaths only when runpath is empty
-        if (runpath != MAX_OFFSET_T) {
-            fputs(indent, stdout);
-            if (color_output)
-                fputs(BRIGHT_BLACK, stdout);
-            fputs(" 1. rpath is skipped because runpath was set\n", stdout);
-        } else {
-            fputs(indent, stdout);
-            fputs(color_output ? BRIGHT_BLACK " 1. rpath:" CLEAR "\n"
-                               : " 1. rpath:",
-                  stdout);
-            for (int j = depth; j >= 0; --j) {
-                if (rpath_offsets[j] != SIZE_MAX) {
-                    fputs(indent, stdout);
-                    if (color_output)
-                        fputs(BRIGHT_BLACK, stdout);
-                    printf("    depth %d\n", j);
-                    print_colon_delimited_paths(buf + rpath_offsets[j], indent);
-                }
-            }
-        }
-
-        if (ld_library_path_offset == SIZE_MAX) {
-            fputs(indent, stdout);
-            fputs(color_output ? BRIGHT_BLACK
-                      " 2. LD_LIBRARY_PATH was not set" CLEAR "\n"
-                               : " 2. LD_LIBRARY_PATH was not set\n",
-                  stdout);
-        } else {
-            fputs(indent, stdout);
-            fputs(color_output ? BRIGHT_BLACK " 2. LD_LIBRARY_PATH:" CLEAR "\n"
-                               : " 2. LD_LIBRARY_PATH:\n",
-                  stdout);
-            print_colon_delimited_paths(buf + ld_library_path_offset, indent);
-        }
-
-        if (runpath == MAX_OFFSET_T) {
-            fputs(indent, stdout);
-            fputs(color_output ? BRIGHT_BLACK " 3. runpath was not set" CLEAR
-                                              "\n"
-                               : " 3. runpath was not set\n",
-                  stdout);
-        } else {
-            fputs(indent, stdout);
-            fputs(color_output ? BRIGHT_BLACK " 3. runpath:" CLEAR "\n"
-                               : " 3. runpath:\n",
-                  stdout);
-            print_colon_delimited_paths(buf + runpath_buf_offset, indent);
-        }
-
-        fputs(indent, stdout);
-        fputs(color_output ? BRIGHT_BLACK " 4. ld.so.conf:" CLEAR "\n"
-                           : " 4. ld.so.conf:\n",
-              stdout);
-        print_colon_delimited_paths(buf + ld_so_conf_offset, indent);
-
-        fputs(indent, stdout);
-        fputs(color_output ? BRIGHT_BLACK " 5. Standard paths:" CLEAR "\n"
-                           : " 5. Standard paths:\n",
-              stdout);
-        print_colon_delimited_paths(buf + default_paths_offset, indent);
-
+        print_error(depth, needed_not_found, &needed_buf_offsets,
+                    runpath == MAX_OFFSET_T ? NULL : buf + runpath_buf_offset);
         buf_size = old_buf_size;
-        free(indent);
         small_vec_u64_free(&needed_buf_offsets);
         small_vec_u64_free(&needed);
         return ERR_NOT_FOUND;
