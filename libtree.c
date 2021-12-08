@@ -123,6 +123,7 @@ struct dyn_32 {
 #define ERR_INVALID_RPATH 15
 #define ERR_INVALID_RUNPATH 16
 #define ERR_INVALID_NEEDED 17
+#define ERR_NOT_FOUND 18
 
 #define MAX_OFFSET_T 0xFFFFFFFFFFFFFFFF
 
@@ -168,6 +169,7 @@ struct found_t {
 // large buffer in which to copy rpaths, needed libraries and sonames.
 char *buf;
 size_t buf_size;
+size_t max_buf_size;
 
 // rpath stack: if lib_a needs lib_b needs lib_c and all have rpaths
 // then first lib_c's rpaths are considered, then lib_b's, then lib_a's.
@@ -191,6 +193,39 @@ struct visited_file visited_files[128];
 size_t visited_files_count;
 
 int color_output = 0;
+
+static inline void maybe_grow_string_buffer(size_t n) {
+    // The likely case of not having to resize
+    if (buf_size + n <= max_buf_size)
+        return;
+
+    // Otherwise give twice the amount of required space.
+    max_buf_size = 2 * (buf_size + n);
+    char *res = realloc(buf, max_buf_size);
+    if (res == NULL) {
+        free(buf);
+        exit(1);
+    }
+    buf = res;
+}
+
+static void store_string(char *str) {
+    size_t n = strlen(str) + 1;
+    maybe_grow_string_buffer(n);
+    memcpy(buf + buf_size, str, n);
+    buf_size += n;
+}
+
+static void copy_from_file(FILE *fptr) {
+    char c;
+    // TODO: this could be a bit more efficient...
+    while ((c = getc(fptr)) != '\0' && c != EOF) {
+        maybe_grow_string_buffer(1);
+        buf[buf_size++] = c;
+    }
+    maybe_grow_string_buffer(1);
+    buf[buf_size++] = '\0';
+}
 
 static int is_in_exclude_list(char *soname) {
     // Get to the end.
@@ -351,13 +386,6 @@ static int interpolate_variables(char *dst, char *src, char *ORIGIN, char *LIB,
     }
 
     return 0;
-}
-
-static void copy_from_file(FILE *fptr) {
-    char c;
-    while ((c = getc(fptr)) != '\0' && c != EOF)
-        buf[buf_size++] = c;
-    buf[buf_size++] = '\0';
 }
 
 static void print_colon_delimited_paths(char *start, char *indent) {
@@ -986,6 +1014,9 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
 
     free(indent);
 
+    buf_size = old_buf_size;
+    return ERR_NOT_FOUND;
+
 success:
     // Free memory in our string table
     buf_size = old_buf_size;
@@ -1074,10 +1105,9 @@ static int parse_ld_config_file(char *path) {
 
             ld_conf_globbing(begin);
         } else {
-            size_t n = strlen(begin);
-            memcpy(buf + buf_size, begin, n);
-            buf_size += n;
-            buf[buf_size++] = ':';
+            // Copy over and replace trailing \0 with :.
+            store_string(begin);
+            buf[buf_size - 1] = ':';
         }
     }
 
@@ -1091,7 +1121,8 @@ static void parse_ld_so_conf() {
     ld_so_conf_offset = buf_size;
     parse_ld_config_file("/etc/ld.so.conf");
 
-    // Replace the last semicolon with a '\0'.
+    // Replace the last semicolon with a '\0'
+    // if we have a nonzero number of paths.
     if (buf_size > ld_so_conf_offset)
         buf[buf_size - 1] = '\0';
 }
@@ -1108,33 +1139,25 @@ static void parse_ld_library_path() {
     ld_library_path_offset = buf_size;
 
     // otherwise, we just copy it over and replace ; with :
-    // so that it's similar to rpaths.
-    size_t bytes = strlen(val) + 1;
-
-    // include the \0.
-    memcpy(buf + buf_size, val, bytes);
+    store_string(val);
 
     // replace ; with :
-    char *search = buf + buf_size;
+    char *search = buf + ld_library_path_offset;
     while ((search = strchr(search, ';')) != NULL)
         *search++ = ':';
-
-    buf_size += bytes;
 }
 
 static void set_default_paths() {
     default_paths_offset = buf_size;
-    char *default_paths = "/lib:/lib64:/usr/lib:/usr/lib64";
-    size_t bytes = strlen(default_paths) + 1;
-    memcpy(buf + default_paths_offset, default_paths, bytes);
-    buf_size += bytes;
+    store_string("/lib:/lib64:/usr/lib:/usr/lib64");
 }
 
 static int print_tree(int pathc, char **pathv, struct libtree_options *opts) {
     // This is where we store rpaths, sonames, needed, search paths.
-    // and yes I should fix buffer overflow issues...
-    buf = malloc(16 * 1024);
+    max_buf_size = 1024;
     buf_size = 0;
+    buf = malloc(max_buf_size);
+
     visited_files_count = 0;
 
     // First collect standard paths
