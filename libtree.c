@@ -148,7 +148,9 @@ struct dyn_32 {
 #define JUST_INDENT "    "
 #define LIGHT_VERTICAL_WITH_INDENT LIGHT_VERTICAL "   "
 
-#define SMALL_ARRAY_STACK_SIZE 1
+#define SMALL_VEC_SIZE 1
+#define MAX_RECURSION_DEPTH 32
+#define MAX_VISITED_FILES 256
 
 typedef enum { EITHER, BITS32, BITS64 } elf_bits_t;
 
@@ -180,12 +182,14 @@ size_t max_buf_size;
 // so this data structure keeps a list of offsets into the string buffer
 // where rpaths start, like [lib_a_rpath_offset, lib_b_rpath_offset,
 // lib_c_rpath_offset]...
-size_t rpath_offsets[16];
+size_t rpath_offsets[MAX_RECURSION_DEPTH];
 size_t ld_library_path_offset;
 size_t default_paths_offset;
 size_t ld_so_conf_offset;
 
-char found_all_needed[16];
+// This is so we know we have to print a | or white space
+// in the tree
+char found_all_needed[MAX_RECURSION_DEPTH];
 
 struct visited_file {
     dev_t st_dev;
@@ -193,44 +197,40 @@ struct visited_file {
 };
 
 // Keep track of the files we've see
-struct visited_file visited_files[128];
+struct visited_file visited_files[MAX_VISITED_FILES];
 size_t visited_files_count;
 
 int color_output = 0;
 
 /**
- * small_array is an array that lives on the stack but can grow into heap memory
+ * small_vec_u64 is an array that lives on the stack until it grows to the heap
  */
-struct small_array_uint64_t {
-    uint64_t buf[SMALL_ARRAY_STACK_SIZE];
+struct small_vec_u64 {
+    uint64_t buf[SMALL_VEC_SIZE];
     uint64_t *p;
     size_t n;
     size_t capacity;
 };
 
-static uint64_t *small_array_uint64_t_get(struct small_array_uint64_t *v) {
-    return v->n <= SMALL_ARRAY_STACK_SIZE ? v->buf : v->p;
-}
-
-static inline void small_array_uint64_t_init(struct small_array_uint64_t *v) {
+static inline void small_vec_u64_init(struct small_vec_u64 *v) {
     memset(v, 0, sizeof(*v));
+    v->p = v->buf;
 }
 
-static void small_array_uint64_t_append(struct small_array_uint64_t *v,
-                                        uint64_t val) {
-    // The likely path
-    if (v->n < SMALL_ARRAY_STACK_SIZE) {
-        v->buf[v->n++] = val;
+static void small_vec_u64_append(struct small_vec_u64 *v, uint64_t val) {
+    // The hopefully likely path
+    if (v->n < SMALL_VEC_SIZE) {
+        v->p[v->n++] = val;
         return;
     }
 
     // The slow fallback on the heap
-    if (v->n == SMALL_ARRAY_STACK_SIZE) {
-        v->capacity = 2 * SMALL_ARRAY_STACK_SIZE;
+    if (v->n == SMALL_VEC_SIZE) {
+        v->capacity = 2 * SMALL_VEC_SIZE;
         v->p = malloc(v->capacity * sizeof(uint64_t));
-        if (!v->p)
+        if (v->p == NULL)
             exit(1);
-        memcpy(v->p, v->buf, SMALL_ARRAY_STACK_SIZE * sizeof(uint64_t));
+        memcpy(v->p, v->buf, SMALL_VEC_SIZE * sizeof(uint64_t));
     } else if (v->n == v->capacity) {
         v->capacity *= 2;
         uint64_t *p = realloc(v->p, v->capacity * sizeof(uint64_t));
@@ -242,14 +242,18 @@ static void small_array_uint64_t_append(struct small_array_uint64_t *v,
     v->p[v->n++] = val;
 }
 
-static void small_array_uint64_t_free(struct small_array_uint64_t *v) {
-    if (v->n <= SMALL_ARRAY_STACK_SIZE)
+static void small_vec_u64_free(struct small_vec_u64 *v) {
+    if (v->n <= SMALL_VEC_SIZE)
         return;
+    if (v->p == NULL) {
+        printf("freeing null?\n");
+    }
     free(v->p);
+    v->p = NULL;
 }
 
 /**
- * end of small_array
+ * end of small_vec_u64
  */
 
 static int is_ascending_order(uint64_t *v, size_t n) {
@@ -260,7 +264,7 @@ static int is_ascending_order(uint64_t *v, size_t n) {
     return 1;
 }
 
-static inline void maybe_grow_string_buffer(size_t n) {
+static void maybe_grow_string_buffer(size_t n) {
     // The likely case of not having to resize
     if (buf_size + n <= max_buf_size)
         return;
@@ -325,26 +329,26 @@ static void tree_preamble(int depth) {
         return;
 
     for (int i = 0; i < depth - 1; ++i) {
-        if (found_all_needed[i])
-            fputs(JUST_INDENT, stdout);
-        else
-            fputs(LIGHT_VERTICAL_WITH_INDENT, stdout);
+        fputs(found_all_needed[i] ? JUST_INDENT : LIGHT_VERTICAL_WITH_INDENT,
+              stdout);
     }
 
-    if (found_all_needed[depth - 1])
-        fputs(LIGHT_UP_AND_RIGHT LIGHT_HORIZONTAL LIGHT_HORIZONTAL " ", stdout);
-    else
-        fputs(LIGHT_VERTICAL_AND_RIGHT LIGHT_HORIZONTAL LIGHT_HORIZONTAL " ",
-              stdout);
+    fputs(found_all_needed[depth - 1]
+              ? LIGHT_UP_AND_RIGHT LIGHT_HORIZONTAL LIGHT_HORIZONTAL " "
+              : LIGHT_VERTICAL_AND_RIGHT LIGHT_HORIZONTAL LIGHT_HORIZONTAL " ",
+          stdout);
 }
 
 static int recurse(char *current_file, int depth, struct libtree_options *opts,
                    elf_bits_t bits, struct found_t reason);
 
-static void check_search_paths(struct found_t reason, char *path, size_t offset,
+static void check_search_paths(struct found_t reason, size_t offset,
                                size_t *needed_not_found,
-                               size_t needed_buf_offsets[32], int depth,
-                               struct libtree_options *opts, elf_bits_t bits) {
+                               struct small_vec_u64 *needed_buf_offsets,
+                               int depth, struct libtree_options *opts,
+                               elf_bits_t bits) {
+    char path[4096];
+    char *path_end = path + 4096;
     while (buf[offset] != '\0') {
         // First remove trailing colons
         for (; buf[offset] == ':' && buf[offset] != '\0'; ++offset) {
@@ -356,8 +360,12 @@ static void check_search_paths(struct found_t reason, char *path, size_t offset,
 
         // Copy the search path until the first \0 or :
         char *dest = path;
-        while (buf[offset] != '\0' && buf[offset] != ':')
+        while (buf[offset] != '\0' && buf[offset] != ':' && dest != path_end)
             *dest++ = buf[offset++];
+
+        // Path too long... Can't handle.
+        if (dest + 1 >= path_end)
+            continue;
 
         // Add a separator if necessary
         if (*(dest - 1) != '/')
@@ -368,16 +376,25 @@ static void check_search_paths(struct found_t reason, char *path, size_t offset,
 
         // Try to open it -- if we've found anything, swap it with the back.
         for (size_t i = 0; i < *needed_not_found;) {
-            // Append the soname.
-            strcpy(search_path_end, buf + needed_buf_offsets[i]);
+            size_t soname_len = strlen(buf + needed_buf_offsets->p[i]);
+
+            // Path too long, can't handle.
+            if (search_path_end + soname_len + 1 >= path_end)
+                continue;
+
+            // Otherwise append.
+            memcpy(search_path_end, buf + needed_buf_offsets->p[i],
+                   soname_len + 1);
             found_all_needed[depth] = *needed_not_found <= 1;
+
+            // And try to locate the lib.
             if (recurse(path, depth + 1, opts, bits, reason) == 0) {
                 // Found it, so swap out the current soname to the back,
                 // and reduce the number of to be found by one.
-                size_t tmp = needed_buf_offsets[i];
-                needed_buf_offsets[i] =
-                    needed_buf_offsets[*needed_not_found - 1];
-                needed_buf_offsets[--(*needed_not_found)] = tmp;
+                size_t tmp = needed_buf_offsets->p[i];
+                needed_buf_offsets->p[i] =
+                    needed_buf_offsets->p[*needed_not_found - 1];
+                needed_buf_offsets->p[--(*needed_not_found)] = tmp;
             } else {
                 ++i;
             }
@@ -540,32 +557,44 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
 
     // Parse the header
     char e_ident[16];
-    if (fread(&e_ident, 16, 1, fptr) != 1)
+    if (fread(&e_ident, 16, 1, fptr) != 1) {
+        fclose(fptr);
         return ERR_INVALID_MAGIC;
+    }
 
     // Find magic elfs
     if (e_ident[0] != 0x7f || e_ident[1] != 'E' || e_ident[2] != 'L' ||
-        e_ident[3] != 'F')
+        e_ident[3] != 'F') {
+        fclose(fptr);
         return ERR_INVALID_MAGIC;
+    }
 
     // Do at least *some* header validation
-    if (e_ident[4] != '\x01' && e_ident[4] != '\x02')
+    if (e_ident[4] != '\x01' && e_ident[4] != '\x02') {
+        fclose(fptr);
         return ERR_INVALID_CLASS;
+    }
 
-    if (e_ident[5] != '\x01' && e_ident[5] != '\x02')
+    if (e_ident[5] != '\x01' && e_ident[5] != '\x02') {
+        fclose(fptr);
         return ERR_INVALID_DATA;
+    }
 
     elf_bits_t curr_bits = e_ident[4] == '\x02' ? BITS64 : BITS32;
     int is_little_endian = e_ident[5] == '\x01';
 
     // Make sure that we have matching bits with dependent
-    if (parent_bits != EITHER && parent_bits != curr_bits)
+    if (parent_bits != EITHER && parent_bits != curr_bits) {
+        fclose(fptr);
         return ERR_INVALID_BITS;
+    }
 
     // Make sure that the elf file has a the host's endianness
     // Byte swapping is on the TODO list
-    if (is_little_endian ^ host_is_little_endian())
+    if (is_little_endian ^ host_is_little_endian()) {
+        fclose(fptr);
         return ERR_UNSUPPORTED_ELF_FILE;
+    }
 
     // And get the type
     union {
@@ -575,19 +604,31 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
 
     // Read the (rest of the) elf header
     if (curr_bits == BITS64) {
-        if (fread(&header.h64, sizeof(struct header_64), 1, fptr) != 1)
+        if (fread(&header.h64, sizeof(struct header_64), 1, fptr) != 1) {
+            fclose(fptr);
             return ERR_INVALID_HEADER;
-        if (header.h64.e_type != ET_EXEC && header.h64.e_type != ET_DYN)
+        }
+        if (header.h64.e_type != ET_EXEC && header.h64.e_type != ET_DYN) {
+            fclose(fptr);
             return ERR_NO_EXEC_OR_DYN;
-        if (fseek(fptr, header.h64.e_phoff, SEEK_SET) != 0)
+        }
+        if (fseek(fptr, header.h64.e_phoff, SEEK_SET) != 0) {
+            fclose(fptr);
             return ERR_INVALID_PHOFF;
+        }
     } else {
-        if (fread(&header.h32, sizeof(struct header_32), 1, fptr) != 1)
+        if (fread(&header.h32, sizeof(struct header_32), 1, fptr) != 1) {
+            fclose(fptr);
             return ERR_INVALID_HEADER;
-        if (header.h32.e_type != ET_EXEC && header.h32.e_type != ET_DYN)
+        }
+        if (header.h32.e_type != ET_EXEC && header.h32.e_type != ET_DYN) {
+            fclose(fptr);
             return ERR_NO_EXEC_OR_DYN;
-        if (fseek(fptr, header.h32.e_phoff, SEEK_SET) != 0)
+        }
+        if (fseek(fptr, header.h32.e_phoff, SEEK_SET) != 0) {
+            fclose(fptr);
             return ERR_INVALID_PHOFF;
+        }
     }
 
     // Make sure it's an executable or library
@@ -598,33 +639,42 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
 
     // map vaddr to file offset (we don't mmap the file, but directly seek in
     // the file which means that we have to translate vaddr to file offset)
-    struct small_array_uint64_t pt_load_offset;
-    small_array_uint64_t_init(&pt_load_offset);
-    struct small_array_uint64_t pt_load_vaddr;
-    small_array_uint64_t_init(&pt_load_vaddr);
+    struct small_vec_u64 pt_load_offset;
+    struct small_vec_u64 pt_load_vaddr;
+
+    small_vec_u64_init(&pt_load_offset);
+    small_vec_u64_init(&pt_load_vaddr);
 
     // Read the program header.
     uint64_t p_offset = MAX_OFFSET_T;
     if (curr_bits == BITS64) {
         for (uint64_t i = 0; i < header.h64.e_phnum; ++i) {
-            if (fread(&prog.p64, sizeof(struct prog_64), 1, fptr) != 1)
+            if (fread(&prog.p64, sizeof(struct prog_64), 1, fptr) != 1) {
+                fclose(fptr);
+                small_vec_u64_free(&pt_load_offset);
+                small_vec_u64_free(&pt_load_vaddr);
                 return ERR_INVALID_PROG_HEADER;
+            }
 
             if (prog.p64.p_type == PT_LOAD) {
-                small_array_uint64_t_append(&pt_load_offset, prog.p64.p_offset);
-                small_array_uint64_t_append(&pt_load_vaddr, prog.p64.p_vaddr);
+                small_vec_u64_append(&pt_load_offset, prog.p64.p_offset);
+                small_vec_u64_append(&pt_load_vaddr, prog.p64.p_vaddr);
             } else if (prog.p64.p_type == PT_DYNAMIC) {
                 p_offset = prog.p64.p_offset;
             }
         }
     } else {
         for (uint32_t i = 0; i < header.h32.e_phnum; ++i) {
-            if (fread(&prog.p32, sizeof(struct prog_32), 1, fptr) != 1)
+            if (fread(&prog.p32, sizeof(struct prog_32), 1, fptr) != 1) {
+                fclose(fptr);
+                small_vec_u64_free(&pt_load_offset);
+                small_vec_u64_free(&pt_load_vaddr);
                 return ERR_INVALID_PROG_HEADER;
+            }
 
             if (prog.p32.p_type == PT_LOAD) {
-                small_array_uint64_t_append(&pt_load_offset, prog.p32.p_offset);
-                small_array_uint64_t_append(&pt_load_vaddr, prog.p32.p_vaddr);
+                small_vec_u64_append(&pt_load_offset, prog.p32.p_offset);
+                small_vec_u64_append(&pt_load_vaddr, prog.p32.p_vaddr);
             } else if (prog.p32.p_type == PT_DYNAMIC) {
                 p_offset = prog.p32.p_offset;
             }
@@ -635,6 +685,8 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
     struct stat finfo;
     if (fstat(fileno(fptr), &finfo) != 0) {
         fclose(fptr);
+        small_vec_u64_free(&pt_load_offset);
+        small_vec_u64_free(&pt_load_vaddr);
         return ERR_CANT_STAT;
     }
 
@@ -647,7 +699,7 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
         }
     }
 
-    if (!seen_before) {
+    if (!seen_before && visited_files_count < MAX_VISITED_FILES) {
         visited_files[visited_files_count].st_dev = finfo.st_dev;
         visited_files[visited_files_count].st_ino = finfo.st_ino;
         ++visited_files_count;
@@ -657,6 +709,8 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
     if (p_offset == MAX_OFFSET_T) {
         print_line(depth, current_file, BOLD_CYAN, 1, reason);
         fclose(fptr);
+        small_vec_u64_free(&pt_load_offset);
+        small_vec_u64_free(&pt_load_vaddr);
         return 0;
     }
 
@@ -664,12 +718,19 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
     // table, so if there are not PT_LOAD sections, then
     // it is an error.
     if (pt_load_offset.n == 0) {
+        fclose(fptr);
+        small_vec_u64_free(&pt_load_offset);
+        small_vec_u64_free(&pt_load_vaddr);
         return ERR_NO_PT_LOAD;
     }
 
     // Go to the dynamic section
-    if (fseek(fptr, p_offset, SEEK_SET) != 0)
+    if (fseek(fptr, p_offset, SEEK_SET) != 0) {
+        fclose(fptr);
+        small_vec_u64_free(&pt_load_offset);
+        small_vec_u64_free(&pt_load_vaddr);
         return ERR_INVALID_DYNAMIC_SECTION;
+    }
 
     uint64_t strtab = MAX_OFFSET_T;
     uint64_t rpath = MAX_OFFSET_T;
@@ -677,8 +738,8 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
     uint64_t soname = MAX_OFFSET_T;
 
     // Offsets in strtab
-    uint64_t neededs[32];
-    uint64_t needed_count = 0;
+    struct small_vec_u64 needed;
+    small_vec_u64_init(&needed);
 
     for (int cont = 1; cont;) {
         uint64_t d_tag;
@@ -686,15 +747,25 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
 
         if (curr_bits == BITS64) {
             struct dyn_64 dyn;
-            if (fread(&dyn, sizeof(struct dyn_64), 1, fptr) != 1)
+            if (fread(&dyn, sizeof(struct dyn_64), 1, fptr) != 1) {
+                fclose(fptr);
+                small_vec_u64_free(&pt_load_offset);
+                small_vec_u64_free(&pt_load_vaddr);
+                small_vec_u64_free(&needed);
                 return ERR_INVALID_DYNAMIC_ARRAY_ENTRY;
+            }
             d_tag = dyn.d_tag;
             d_val = dyn.d_val;
 
         } else {
             struct dyn_32 dyn;
-            if (fread(&dyn, sizeof(struct dyn_32), 1, fptr) != 1)
+            if (fread(&dyn, sizeof(struct dyn_32), 1, fptr) != 1) {
+                fclose(fptr);
+                small_vec_u64_free(&pt_load_offset);
+                small_vec_u64_free(&pt_load_vaddr);
+                small_vec_u64_free(&needed);
                 return ERR_INVALID_DYNAMIC_ARRAY_ENTRY;
+            }
             d_tag = dyn.d_tag;
             d_val = dyn.d_val;
         }
@@ -714,7 +785,7 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
             runpath = d_val;
             break;
         case DT_NEEDED:
-            neededs[needed_count++] = d_val;
+            small_vec_u64_append(&needed, d_val);
             break;
         case DT_SONAME:
             soname = d_val;
@@ -722,37 +793,47 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
         }
     }
 
-    if (strtab == MAX_OFFSET_T)
+    if (strtab == MAX_OFFSET_T) {
+        fclose(fptr);
+        small_vec_u64_free(&pt_load_offset);
+        small_vec_u64_free(&pt_load_vaddr);
+        small_vec_u64_free(&needed);
         return ERR_NO_STRTAB;
+    }
 
     // Let's verify just to be sure that the offsets are
     // ordered.
-    uint64_t *vaddrs = small_array_uint64_t_get(&pt_load_vaddr);
-    uint64_t *offsets = small_array_uint64_t_get(&pt_load_offset);
-
-    if (!is_ascending_order(vaddrs, pt_load_vaddr.n)) {
-        small_array_uint64_t_free(&pt_load_vaddr);
-        small_array_uint64_t_free(&pt_load_offset);
+    if (!is_ascending_order(pt_load_vaddr.p, pt_load_vaddr.n)) {
+        fclose(fptr);
+        small_vec_u64_free(&pt_load_vaddr);
+        small_vec_u64_free(&pt_load_offset);
+        small_vec_u64_free(&needed);
         return ERR_VADDRS_NOT_ORDERED;
     }
 
     // Find the file offset corresponding to the strtab virtual address
     size_t vaddr_idx = 0;
     while (vaddr_idx + 1 != pt_load_vaddr.n &&
-           strtab >= vaddrs[vaddr_idx + 1]) {
+           strtab >= pt_load_vaddr.p[vaddr_idx + 1]) {
         ++vaddr_idx;
     }
 
-    uint64_t strtab_offset = offsets[vaddr_idx] + strtab - vaddrs[vaddr_idx];
+    uint64_t strtab_offset =
+        pt_load_offset.p[vaddr_idx] + strtab - pt_load_vaddr.p[vaddr_idx];
 
-    small_array_uint64_t_free(&pt_load_vaddr);
-    small_array_uint64_t_free(&pt_load_offset);
+    small_vec_u64_free(&pt_load_vaddr);
+    small_vec_u64_free(&pt_load_offset);
+
+    // From this point on we actually copy strings from the ELF file into our
+    // own string buffer.
 
     // Copy the current soname
     size_t soname_buf_offset = buf_size;
     if (soname != MAX_OFFSET_T) {
         if (fseek(fptr, strtab_offset + soname, SEEK_SET) != 0) {
             buf_size = old_buf_size;
+            fclose(fptr);
+            small_vec_u64_free(&needed);
             return ERR_INVALID_SONAME;
         }
         copy_from_file(fptr);
@@ -763,9 +844,10 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
 
     // No need to recurse deeper when we aren't in very verbose mode.
     int should_recurse =
-        (!seen_before && !in_exclude_list) ||
-        (!seen_before && in_exclude_list && opts->verbosity >= 2) ||
-        opts->verbosity == 3;
+        depth < MAX_RECURSION_DEPTH &&
+        ((!seen_before && !in_exclude_list) ||
+         (!seen_before && in_exclude_list && opts->verbosity >= 2) ||
+         opts->verbosity == 3);
 
     // Just print the library and return
     if (!should_recurse) {
@@ -774,8 +856,11 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
                                : current_file;
         char *print_color = in_exclude_list ? REGULAR_MAGENTA : REGULAR_BLUE;
         print_line(depth, print_name, print_color, 0, reason);
+
+        buf_size = old_buf_size;
         fclose(fptr);
-        goto success;
+        small_vec_u64_free(&needed);
+        return 0;
     }
 
     // Store the ORIGIN string.
@@ -793,8 +878,6 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
         origin[2] = '\0';
     }
 
-    // pointers into the buffer for rpath, soname and needed
-
     // Copy DT_PRATH
     if (rpath == MAX_OFFSET_T) {
         rpath_offsets[depth] = SIZE_MAX;
@@ -802,6 +885,8 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
         rpath_offsets[depth] = buf_size;
         if (fseek(fptr, strtab_offset + rpath, SEEK_SET) != 0) {
             buf_size = old_buf_size;
+            fclose(fptr);
+            small_vec_u64_free(&needed);
             return ERR_INVALID_RPATH;
         }
 
@@ -822,6 +907,8 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
     if (runpath != MAX_OFFSET_T) {
         if (fseek(fptr, strtab_offset + runpath, SEEK_SET) != 0) {
             buf_size = old_buf_size;
+            fclose(fptr);
+            small_vec_u64_free(&needed);
             return ERR_INVALID_RUNPATH;
         }
 
@@ -837,11 +924,16 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
     }
 
     // Copy needed libraries.
-    size_t needed_buf_offsets[32];
-    for (size_t i = 0; i < needed_count; ++i) {
-        needed_buf_offsets[i] = buf_size;
-        if (fseek(fptr, strtab_offset + neededs[i], SEEK_SET) != 0) {
+    struct small_vec_u64 needed_buf_offsets;
+    small_vec_u64_init(&needed_buf_offsets);
+
+    for (size_t i = 0; i < needed.n; ++i) {
+        small_vec_u64_append(&needed_buf_offsets, buf_size);
+        if (fseek(fptr, strtab_offset + needed.p[i], SEEK_SET) != 0) {
             buf_size = old_buf_size;
+            fclose(fptr);
+            small_vec_u64_free(&needed_buf_offsets);
+            small_vec_u64_free(&needed);
             return ERR_INVALID_NEEDED;
         }
         copy_from_file(fptr);
@@ -860,36 +952,29 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
     int highlight = !seen_before && !in_exclude_list;
     print_line(depth, print_name, print_color, highlight, reason);
 
-    // Buffer for the full search path
-    char path[4096];
+    // Finally start searching.
 
-    size_t needed_not_found = needed_count;
-
-    if (needed_not_found == 0)
-        goto success;
+    size_t needed_not_found = needed_buf_offsets.n;
 
     // Skip common libraries if not verbose
-    if (opts->verbosity == 0) {
+    if (needed_not_found && opts->verbosity == 0) {
         for (size_t i = 0; i < needed_not_found;) {
             // If in exclude list, swap to the back.
-            if (is_in_exclude_list(buf + needed_buf_offsets[i])) {
-                size_t tmp = needed_buf_offsets[i];
-                needed_buf_offsets[i] =
-                    needed_buf_offsets[needed_not_found - 1];
-                needed_buf_offsets[--needed_not_found] = tmp;
+            if (is_in_exclude_list(buf + needed_buf_offsets.p[i])) {
+                size_t tmp = needed_buf_offsets.p[i];
+                needed_buf_offsets.p[i] =
+                    needed_buf_offsets.p[needed_not_found - 1];
+                needed_buf_offsets.p[--needed_not_found] = tmp;
                 continue;
             } else {
                 ++i;
             }
         }
-
-        if (needed_not_found == 0)
-            goto success;
     }
 
     // First go over absolute paths in needed libs.
     for (size_t i = 0; i < needed_not_found;) {
-        char *name = buf + needed_buf_offsets[i];
+        char *name = buf + needed_buf_offsets.p[i];
         if (strchr(name, '/') != NULL) {
             // If it is not an absolute path, we bail, cause it then starts to
             // depend on the current working directory, which is rather
@@ -901,10 +986,7 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
                     fputs(BOLD_RED, stdout);
                 fputs(name, stdout);
                 fputs(" is not absolute", stdout);
-                if (color_output)
-                    fputs(CLEAR "\n", stdout);
-                else
-                    putchar('\n');
+                fputs(color_output ? CLEAR "\n" : "\n", stdout);
             } else if (recurse(name, depth + 1, opts, curr_bits,
                                (struct found_t){.how = DIRECT, .depth = 0}) !=
                        0) {
@@ -913,187 +995,179 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
                     fputs(BOLD_RED, stdout);
                 fputs(name, stdout);
                 fputs(" not found", stdout);
-                if (color_output)
-                    fputs(CLEAR "\n", stdout);
+                fputs(color_output ? CLEAR "\n" : "\n", stdout);
             }
 
             // Even if not officially found, we mark it as found, cause we
             // handled the error here
-            size_t tmp = needed_buf_offsets[i];
-            needed_buf_offsets[i] = needed_buf_offsets[needed_not_found - 1];
-            needed_buf_offsets[--needed_not_found] = tmp;
+            size_t tmp = needed_buf_offsets.p[i];
+            needed_buf_offsets.p[i] =
+                needed_buf_offsets.p[needed_not_found - 1];
+            needed_buf_offsets.p[--needed_not_found] = tmp;
         } else {
             ++i;
         }
     }
 
-    if (needed_not_found == 0)
-        goto success;
-
     // Consider rpaths only when runpath is empty
     if (runpath == MAX_OFFSET_T) {
         // We have a stack of rpaths, try them all, starting with one set at
         // this lib, then the parents.
-        for (int j = depth; j >= 0; --j) {
-            if (needed_not_found == 0)
-                break;
+        for (int j = depth; j >= 0 && needed_not_found; --j) {
             if (rpath_offsets[j] == SIZE_MAX)
                 continue;
-            check_search_paths((struct found_t){.how = RPATH, .depth = j}, path,
+
+            check_search_paths((struct found_t){.how = RPATH, .depth = j},
                                rpath_offsets[j], &needed_not_found,
-                               needed_buf_offsets, depth, opts, curr_bits);
+                               &needed_buf_offsets, depth, opts, curr_bits);
         }
     }
-
-    if (needed_not_found == 0)
-        goto success;
 
     // Then try LD_LIBRARY_PATH, if we have it.
-    if (ld_library_path_offset != SIZE_MAX) {
+    if (needed_not_found && ld_library_path_offset != SIZE_MAX) {
         check_search_paths((struct found_t){.how = LD_LIBRARY_PATH, .depth = 0},
-                           path, ld_library_path_offset, &needed_not_found,
-                           needed_buf_offsets, depth, opts, curr_bits);
+                           ld_library_path_offset, &needed_not_found,
+                           &needed_buf_offsets, depth, opts, curr_bits);
     }
-
-    if (needed_not_found == 0)
-        goto success;
 
     // Then consider runpaths
-    if (runpath != MAX_OFFSET_T) {
-        check_search_paths((struct found_t){.how = RUNPATH, .depth = 0}, path,
+    if (needed_not_found && runpath != MAX_OFFSET_T) {
+        check_search_paths((struct found_t){.how = RUNPATH, .depth = 0},
                            runpath_buf_offset, &needed_not_found,
-                           needed_buf_offsets, depth, opts, curr_bits);
+                           &needed_buf_offsets, depth, opts, curr_bits);
     }
-
-    if (needed_not_found == 0)
-        goto success;
 
     // Check ld.so.conf paths
-    check_search_paths((struct found_t){.how = LD_SO_CONF, .depth = 0}, path,
-                       ld_so_conf_offset, &needed_not_found, needed_buf_offsets,
-                       depth, opts, curr_bits);
+    if (needed_not_found) {
+        check_search_paths((struct found_t){.how = LD_SO_CONF, .depth = 0},
+                           ld_so_conf_offset, &needed_not_found,
+                           &needed_buf_offsets, depth, opts, curr_bits);
+    }
 
     // Then consider standard paths
-    check_search_paths((struct found_t){.how = DEFAULT, .depth = 0}, path,
-                       default_paths_offset, &needed_not_found,
-                       needed_buf_offsets, depth, opts, curr_bits);
-
-    if (needed_not_found == 0)
-        goto success;
+    if (needed_not_found) {
+        check_search_paths((struct found_t){.how = DEFAULT, .depth = 0},
+                           default_paths_offset, &needed_not_found,
+                           &needed_buf_offsets, depth, opts, curr_bits);
+    }
 
     // Finally summarize those that could not be found.
-    for (size_t i = 0; i < needed_not_found; ++i) {
-        found_all_needed[depth] = i + 1 >= needed_not_found;
-        tree_preamble(depth + 1);
-        if (color_output)
-            fputs(BOLD_RED, stdout);
-        fputs(buf + needed_buf_offsets[i], stdout);
-        fputs(" not found", stdout);
-        if (color_output)
-            fputs(CLEAR "\n", stdout);
-        else
-            putchar('\n');
-    }
-
-    // If anything was not found, we print the search paths in order they are
-    // considered.
-    char *box_vertical =
-        color_output
-            ? REGULAR_RED JUST_INDENT LIGHT_QUADRUPLE_DASH_VERTICAL CLEAR
-            : JUST_INDENT LIGHT_QUADRUPLE_DASH_VERTICAL;
-    char *indent = malloc((sizeof(LIGHT_VERTICAL_WITH_INDENT) - 1) * depth +
-                          strlen(box_vertical));
-    char *p = indent;
-    for (int i = 0; i < depth - 1; ++i) {
-        if (found_all_needed[i]) {
-            int len = sizeof(JUST_INDENT) - 1;
-            memcpy(p, JUST_INDENT, len);
-            p += len;
-        } else {
-            int len = sizeof(LIGHT_VERTICAL_WITH_INDENT) - 1;
-            memcpy(p, LIGHT_VERTICAL_WITH_INDENT, len);
-            p += len;
+    if (needed_not_found) {
+        for (size_t i = 0; i < needed_not_found; ++i) {
+            found_all_needed[depth] = i + 1 >= needed_not_found;
+            tree_preamble(depth + 1);
+            if (color_output)
+                fputs(BOLD_RED, stdout);
+            fputs(buf + needed_buf_offsets.p[i], stdout);
+            fputs(" not found", stdout);
+            if (color_output)
+                fputs(CLEAR "\n", stdout);
+            else
+                putchar('\n');
         }
-    }
-    // dotted | in red
-    strcpy(p, box_vertical);
 
-    fputs(indent, stdout);
-    if (color_output)
-        fputs(BRIGHT_BLACK, stdout);
-    fputs(" Paths considered in this order:\n", stdout);
-
-    // Consider rpaths only when runpath is empty
-    if (runpath != MAX_OFFSET_T) {
-        fputs(indent, stdout);
-        if (color_output)
-            fputs(BRIGHT_BLACK, stdout);
-        fputs(" 1. rpath is skipped because runpath was set\n", stdout);
-    } else {
-        fputs(indent, stdout);
-        if (color_output)
-            fputs(BRIGHT_BLACK, stdout);
-        fputs(" 1. rpath:\n", stdout);
-        for (int j = depth; j >= 0; --j) {
-            if (rpath_offsets[j] != SIZE_MAX) {
-                fputs(indent, stdout);
-                if (color_output)
-                    fputs(BRIGHT_BLACK, stdout);
-                printf("    depth %d\n", j);
-                print_colon_delimited_paths(buf + rpath_offsets[j], indent);
+        // If anything was not found, we print the search paths in order they
+        // are considered.
+        char *box_vertical =
+            color_output
+                ? REGULAR_RED JUST_INDENT LIGHT_QUADRUPLE_DASH_VERTICAL CLEAR
+                : JUST_INDENT LIGHT_QUADRUPLE_DASH_VERTICAL;
+        char *indent = malloc(sizeof(LIGHT_VERTICAL_WITH_INDENT) * depth +
+                              strlen(box_vertical) + 1);
+        char *p = indent;
+        for (int i = 0; i < depth - 1; ++i) {
+            if (found_all_needed[i]) {
+                int len = sizeof(JUST_INDENT) - 1;
+                memcpy(p, JUST_INDENT, len);
+                p += len;
+            } else {
+                int len = sizeof(LIGHT_VERTICAL_WITH_INDENT) - 1;
+                memcpy(p, LIGHT_VERTICAL_WITH_INDENT, len);
+                p += len;
             }
         }
+        // dotted | in red
+        strcpy(p, box_vertical);
+
+        fputs(indent, stdout);
+        if (color_output)
+            fputs(BRIGHT_BLACK, stdout);
+        fputs(" Paths considered in this order:\n", stdout);
+
+        // Consider rpaths only when runpath is empty
+        if (runpath != MAX_OFFSET_T) {
+            fputs(indent, stdout);
+            if (color_output)
+                fputs(BRIGHT_BLACK, stdout);
+            fputs(" 1. rpath is skipped because runpath was set\n", stdout);
+        } else {
+            fputs(indent, stdout);
+            if (color_output)
+                fputs(BRIGHT_BLACK, stdout);
+            fputs(" 1. rpath:\n", stdout);
+            for (int j = depth; j >= 0; --j) {
+                if (rpath_offsets[j] != SIZE_MAX) {
+                    fputs(indent, stdout);
+                    if (color_output)
+                        fputs(BRIGHT_BLACK, stdout);
+                    printf("    depth %d\n", j);
+                    print_colon_delimited_paths(buf + rpath_offsets[j], indent);
+                }
+            }
+        }
+
+        if (ld_library_path_offset == SIZE_MAX) {
+            fputs(indent, stdout);
+            if (color_output)
+                fputs(BRIGHT_BLACK, stdout);
+            fputs(" 2. LD_LIBRARY_PATH was not set\n", stdout);
+        } else {
+            fputs(indent, stdout);
+            if (color_output)
+                fputs(BRIGHT_BLACK, stdout);
+            fputs(" 2. LD_LIBRARY_PATH:\n", stdout);
+            print_colon_delimited_paths(buf + ld_library_path_offset, indent);
+        }
+
+        if (runpath == MAX_OFFSET_T) {
+            fputs(indent, stdout);
+            if (color_output)
+                fputs(BRIGHT_BLACK, stdout);
+            fputs(" 3. runpath was not set\n", stdout);
+        } else {
+            fputs(indent, stdout);
+            if (color_output)
+                fputs(BRIGHT_BLACK, stdout);
+            fputs(" 3. runpath:\n", stdout);
+            print_colon_delimited_paths(buf + runpath_buf_offset, indent);
+        }
+
+        fputs(indent, stdout);
+        if (color_output)
+            fputs(BRIGHT_BLACK, stdout);
+        fputs(" 4. ld.so.conf:\n", stdout);
+        print_colon_delimited_paths(buf + ld_so_conf_offset, indent);
+
+        fputs(indent, stdout);
+        if (color_output)
+            fputs(BRIGHT_BLACK, stdout);
+        fputs(" 5. Standard paths:\n", stdout);
+        print_colon_delimited_paths(buf + default_paths_offset, indent);
+
+        if (color_output)
+            fputs(CLEAR, stdout);
+
+        buf_size = old_buf_size;
+        free(indent);
+        small_vec_u64_free(&needed_buf_offsets);
+        small_vec_u64_free(&needed);
+        return ERR_NOT_FOUND;
     }
 
-    if (ld_library_path_offset == SIZE_MAX) {
-        fputs(indent, stdout);
-        if (color_output)
-            fputs(BRIGHT_BLACK, stdout);
-        fputs(" 2. LD_LIBRARY_PATH was not set\n", stdout);
-    } else {
-        fputs(indent, stdout);
-        if (color_output)
-            fputs(BRIGHT_BLACK, stdout);
-        fputs(" 2. LD_LIBRARY_PATH:\n", stdout);
-        print_colon_delimited_paths(buf + ld_library_path_offset, indent);
-    }
-
-    if (runpath == MAX_OFFSET_T) {
-        fputs(indent, stdout);
-        if (color_output)
-            fputs(BRIGHT_BLACK, stdout);
-        fputs(" 3. runpath was not set\n", stdout);
-    } else {
-        fputs(indent, stdout);
-        if (color_output)
-            fputs(BRIGHT_BLACK, stdout);
-        fputs(" 3. runpath:\n", stdout);
-        print_colon_delimited_paths(buf + runpath_buf_offset, indent);
-    }
-
-    fputs(indent, stdout);
-    if (color_output)
-        fputs(BRIGHT_BLACK, stdout);
-    fputs(" 4. ld.so.conf:\n", stdout);
-    print_colon_delimited_paths(buf + ld_so_conf_offset, indent);
-
-    fputs(indent, stdout);
-    if (color_output)
-        fputs(BRIGHT_BLACK, stdout);
-    fputs(" 5. Standard paths:\n", stdout);
-    print_colon_delimited_paths(buf + default_paths_offset, indent);
-
-    if (color_output)
-        fputs(CLEAR, stdout);
-
-    free(indent);
-
-    buf_size = old_buf_size;
-    return ERR_NOT_FOUND;
-
-success:
     // Free memory in our string table
     buf_size = old_buf_size;
+    small_vec_u64_free(&needed_buf_offsets);
+    small_vec_u64_free(&needed);
     return 0;
 }
 
