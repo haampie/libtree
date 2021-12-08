@@ -124,6 +124,8 @@ struct dyn_32 {
 #define ERR_INVALID_RUNPATH 16
 #define ERR_INVALID_NEEDED 17
 #define ERR_NOT_FOUND 18
+#define ERR_NO_PT_LOAD 19
+#define ERR_VADDRS_NOT_ORDERED 20
 
 #define MAX_OFFSET_T 0xFFFFFFFFFFFFFFFF
 
@@ -145,6 +147,8 @@ struct dyn_32 {
 
 #define JUST_INDENT "    "
 #define LIGHT_VERTICAL_WITH_INDENT LIGHT_VERTICAL "   "
+
+#define SMALL_ARRAY_STACK_SIZE 1
 
 typedef enum { EITHER, BITS32, BITS64 } elf_bits_t;
 
@@ -193,6 +197,68 @@ struct visited_file visited_files[128];
 size_t visited_files_count;
 
 int color_output = 0;
+
+/**
+ * small_array is an array that lives on the stack but can grow into heap memory
+ */
+struct small_array_uint64_t {
+    uint64_t buf[SMALL_ARRAY_STACK_SIZE];
+    uint64_t *p;
+    size_t n;
+    size_t capacity;
+};
+
+static uint64_t *small_array_uint64_t_get(struct small_array_uint64_t *v) {
+    return v->n <= SMALL_ARRAY_STACK_SIZE ? v->buf : v->p;
+}
+
+static inline void small_array_uint64_t_init(struct small_array_uint64_t *v) {
+    memset(v, 0, sizeof(*v));
+}
+
+static void small_array_uint64_t_append(struct small_array_uint64_t *v,
+                                        uint64_t val) {
+    // The likely path
+    if (v->n < SMALL_ARRAY_STACK_SIZE) {
+        v->buf[v->n++] = val;
+        return;
+    }
+
+    // The slow fallback on the heap
+    if (v->n == SMALL_ARRAY_STACK_SIZE) {
+        v->capacity = 2 * SMALL_ARRAY_STACK_SIZE;
+        v->p = malloc(v->capacity * sizeof(uint64_t));
+        if (!v->p)
+            exit(1);
+        memcpy(v->p, v->buf, SMALL_ARRAY_STACK_SIZE * sizeof(uint64_t));
+    } else if (v->n == v->capacity) {
+        v->capacity *= 2;
+        uint64_t *p = realloc(v->p, v->capacity * sizeof(uint64_t));
+        if (p == NULL)
+            exit(1);
+        v->p = p;
+    }
+
+    v->p[v->n++] = val;
+}
+
+static void small_array_uint64_t_free(struct small_array_uint64_t *v) {
+    if (v->n <= SMALL_ARRAY_STACK_SIZE)
+        return;
+    free(v->p);
+}
+
+/**
+ * end of small_array
+ */
+
+static int is_ascending_order(uint64_t *v, size_t n) {
+    for (size_t j = 1; j < n; ++j)
+        if (v[j - 1] >= v[j])
+            return 0;
+
+    return 1;
+}
 
 static inline void maybe_grow_string_buffer(size_t n) {
     // The likely case of not having to resize
@@ -275,23 +341,23 @@ static void tree_preamble(int depth) {
 static int recurse(char *current_file, int depth, struct libtree_options *opts,
                    elf_bits_t bits, struct found_t reason);
 
-static void check_search_paths(struct found_t reason, char *path, char *rpaths,
+static void check_search_paths(struct found_t reason, char *path, size_t offset,
                                size_t *needed_not_found,
                                size_t needed_buf_offsets[32], int depth,
                                struct libtree_options *opts, elf_bits_t bits) {
-    while (*rpaths != '\0') {
+    while (buf[offset] != '\0') {
         // First remove trailing colons
-        for (; *rpaths == ':' && *rpaths != '\0'; ++rpaths) {
+        for (; buf[offset] == ':' && buf[offset] != '\0'; ++offset) {
         }
 
         // Check if it was only colons
-        if (*rpaths == '\0')
+        if (buf[offset] == '\0')
             return;
 
         // Copy the search path until the first \0 or :
         char *dest = path;
-        while (*rpaths != '\0' && *rpaths != ':')
-            *dest++ = *rpaths++;
+        while (buf[offset] != '\0' && buf[offset] != ':')
+            *dest++ = buf[offset++];
 
         // Add a separator if necessary
         if (*(dest - 1) != '/')
@@ -530,18 +596,12 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
         struct prog_32 p32;
     } prog;
 
-    // map vaddr to file offset
-    // TODO: make this dynamic length
-    uint64_t offsets[32];
-    uint64_t addrs[32];
-
-    uint64_t *offsets_end = &offsets[0];
-    uint64_t *addrs_end = &addrs[0];
-
-    for (int i = 0; i < 32; ++i) {
-        offsets[i] = MAX_OFFSET_T;
-        addrs[i] = MAX_OFFSET_T;
-    }
+    // map vaddr to file offset (we don't mmap the file, but directly seek in
+    // the file which means that we have to translate vaddr to file offset)
+    struct small_array_uint64_t pt_load_offset;
+    small_array_uint64_t_init(&pt_load_offset);
+    struct small_array_uint64_t pt_load_vaddr;
+    small_array_uint64_t_init(&pt_load_vaddr);
 
     // Read the program header.
     uint64_t p_offset = MAX_OFFSET_T;
@@ -551,8 +611,8 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
                 return ERR_INVALID_PROG_HEADER;
 
             if (prog.p64.p_type == PT_LOAD) {
-                *offsets_end++ = prog.p64.p_offset;
-                *addrs_end++ = prog.p64.p_vaddr;
+                small_array_uint64_t_append(&pt_load_offset, prog.p64.p_offset);
+                small_array_uint64_t_append(&pt_load_vaddr, prog.p64.p_vaddr);
             } else if (prog.p64.p_type == PT_DYNAMIC) {
                 p_offset = prog.p64.p_offset;
             }
@@ -563,8 +623,8 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
                 return ERR_INVALID_PROG_HEADER;
 
             if (prog.p32.p_type == PT_LOAD) {
-                *offsets_end++ = prog.p32.p_offset;
-                *addrs_end++ = prog.p32.p_vaddr;
+                small_array_uint64_t_append(&pt_load_offset, prog.p32.p_offset);
+                small_array_uint64_t_append(&pt_load_vaddr, prog.p32.p_vaddr);
             } else if (prog.p32.p_type == PT_DYNAMIC) {
                 p_offset = prog.p32.p_offset;
             }
@@ -593,11 +653,18 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
         ++visited_files_count;
     }
 
-    // No dynamic section? (TODO: handle this properly)
+    // No dynamic section?
     if (p_offset == MAX_OFFSET_T) {
         print_line(depth, current_file, BOLD_CYAN, 1, reason);
         fclose(fptr);
         return 0;
+    }
+
+    // I guess you always have to load at least a string
+    // table, so if there are not PT_LOAD sections, then
+    // it is an error.
+    if (pt_load_offset.n == 0) {
+        return ERR_NO_PT_LOAD;
     }
 
     // Go to the dynamic section
@@ -658,20 +725,28 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
     if (strtab == MAX_OFFSET_T)
         return ERR_NO_STRTAB;
 
-    // find the file offset corresponding to the strtab address
-    uint64_t *offset_i = &offsets[0];
-    uint64_t *addr_i = &addrs[0];
+    // Let's verify just to be sure that the offsets are
+    // ordered.
+    uint64_t *vaddrs = small_array_uint64_t_get(&pt_load_vaddr);
+    uint64_t *offsets = small_array_uint64_t_get(&pt_load_offset);
 
-    // Assume we have a sentinel value.
-    // iterate until the next one is larger.
-    while (1) {
-        if (strtab >= *addr_i && strtab < *(addr_i + 1))
-            break;
-        ++offset_i;
-        ++addr_i;
+    if (!is_ascending_order(vaddrs, pt_load_vaddr.n)) {
+        small_array_uint64_t_free(&pt_load_vaddr);
+        small_array_uint64_t_free(&pt_load_offset);
+        return ERR_VADDRS_NOT_ORDERED;
     }
 
-    uint64_t strtab_offset = *offset_i - *addr_i + strtab;
+    // Find the file offset corresponding to the strtab virtual address
+    size_t vaddr_idx = 0;
+    while (vaddr_idx + 1 != pt_load_vaddr.n &&
+           strtab >= vaddrs[vaddr_idx + 1]) {
+        ++vaddr_idx;
+    }
+
+    uint64_t strtab_offset = offsets[vaddr_idx] + strtab - vaddrs[vaddr_idx];
+
+    small_array_uint64_t_free(&pt_load_vaddr);
+    small_array_uint64_t_free(&pt_load_offset);
 
     // Copy the current soname
     size_t soname_buf_offset = buf_size;
@@ -865,7 +940,7 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
             if (rpath_offsets[j] == SIZE_MAX)
                 continue;
             check_search_paths((struct found_t){.how = RPATH, .depth = j}, path,
-                               buf + rpath_offsets[j], &needed_not_found,
+                               rpath_offsets[j], &needed_not_found,
                                needed_buf_offsets, depth, opts, curr_bits);
         }
     }
@@ -876,9 +951,8 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
     // Then try LD_LIBRARY_PATH, if we have it.
     if (ld_library_path_offset != SIZE_MAX) {
         check_search_paths((struct found_t){.how = LD_LIBRARY_PATH, .depth = 0},
-                           path, buf + ld_library_path_offset,
-                           &needed_not_found, needed_buf_offsets, depth, opts,
-                           curr_bits);
+                           path, ld_library_path_offset, &needed_not_found,
+                           needed_buf_offsets, depth, opts, curr_bits);
     }
 
     if (needed_not_found == 0)
@@ -887,7 +961,7 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
     // Then consider runpaths
     if (runpath != MAX_OFFSET_T) {
         check_search_paths((struct found_t){.how = RUNPATH, .depth = 0}, path,
-                           buf + runpath_buf_offset, &needed_not_found,
+                           runpath_buf_offset, &needed_not_found,
                            needed_buf_offsets, depth, opts, curr_bits);
     }
 
@@ -896,12 +970,12 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
 
     // Check ld.so.conf paths
     check_search_paths((struct found_t){.how = LD_SO_CONF, .depth = 0}, path,
-                       buf + ld_so_conf_offset, &needed_not_found,
-                       needed_buf_offsets, depth, opts, curr_bits);
+                       ld_so_conf_offset, &needed_not_found, needed_buf_offsets,
+                       depth, opts, curr_bits);
 
     // Then consider standard paths
     check_search_paths((struct found_t){.how = DEFAULT, .depth = 0}, path,
-                       buf + default_paths_offset, &needed_not_found,
+                       default_paths_offset, &needed_not_found,
                        needed_buf_offsets, depth, opts, curr_bits);
 
     if (needed_not_found == 0)
@@ -923,12 +997,12 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
 
     // If anything was not found, we print the search paths in order they are
     // considered.
-    char *colored_box =
+    char *box_vertical =
         color_output
             ? REGULAR_RED JUST_INDENT LIGHT_QUADRUPLE_DASH_VERTICAL CLEAR
             : JUST_INDENT LIGHT_QUADRUPLE_DASH_VERTICAL;
     char *indent = malloc((sizeof(LIGHT_VERTICAL_WITH_INDENT) - 1) * depth +
-                          strlen(colored_box));
+                          strlen(box_vertical));
     char *p = indent;
     for (int i = 0; i < depth - 1; ++i) {
         if (found_all_needed[i]) {
@@ -942,7 +1016,7 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
         }
     }
     // dotted | in red
-    strcpy(p, colored_box);
+    strcpy(p, box_vertical);
 
     fputs(indent, stdout);
     if (color_output)
