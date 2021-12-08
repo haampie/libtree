@@ -550,6 +550,7 @@ static void print_error(int depth, size_t needed_not_found,
                         struct small_vec_u64 *needed_buf_offsets,
                         char *runpath) {
     for (size_t i = 0; i < needed_not_found; ++i) {
+        found_all_needed[depth] = i + 1 >= needed_not_found;
         tree_preamble(depth + 1);
         if (color_output)
             fputs(BOLD_RED, stdout);
@@ -584,6 +585,8 @@ static void print_error(int depth, size_t needed_not_found,
     if (color_output)
         fputs(BRIGHT_BLACK, stdout);
     fputs(" Paths considered in this order:\n", stdout);
+    if (color_output)
+        fputs(CLEAR, stdout);
 
     // Consider rpaths only when runpath is empty
     fputs(indent, stdout);
@@ -591,6 +594,8 @@ static void print_error(int depth, size_t needed_not_found,
         if (color_output)
             fputs(BRIGHT_BLACK, stdout);
         fputs(" 1. rpath is skipped because runpath was set\n", stdout);
+        if (color_output)
+            fputs(CLEAR, stdout);
     } else {
         fputs(color_output ? BRIGHT_BLACK " 1. rpath:" CLEAR "\n"
                            : " 1. rpath:",
