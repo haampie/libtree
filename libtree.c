@@ -1102,9 +1102,9 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
             fputs(" 1. rpath is skipped because runpath was set\n", stdout);
         } else {
             fputs(indent, stdout);
-            if (color_output)
-                fputs(BRIGHT_BLACK, stdout);
-            fputs(" 1. rpath:\n", stdout);
+            fputs(color_output ? BRIGHT_BLACK " 1. rpath:" CLEAR "\n"
+                               : " 1. rpath:",
+                  stdout);
             for (int j = depth; j >= 0; --j) {
                 if (rpath_offsets[j] != SIZE_MAX) {
                     fputs(indent, stdout);
@@ -1118,44 +1118,43 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
 
         if (ld_library_path_offset == SIZE_MAX) {
             fputs(indent, stdout);
-            if (color_output)
-                fputs(BRIGHT_BLACK, stdout);
-            fputs(" 2. LD_LIBRARY_PATH was not set\n", stdout);
+            fputs(color_output ? BRIGHT_BLACK
+                      " 2. LD_LIBRARY_PATH was not set" CLEAR "\n"
+                               : " 2. LD_LIBRARY_PATH was not set\n",
+                  stdout);
         } else {
             fputs(indent, stdout);
-            if (color_output)
-                fputs(BRIGHT_BLACK, stdout);
-            fputs(" 2. LD_LIBRARY_PATH:\n", stdout);
+            fputs(color_output ? BRIGHT_BLACK " 2. LD_LIBRARY_PATH:" CLEAR "\n"
+                               : " 2. LD_LIBRARY_PATH:\n",
+                  stdout);
             print_colon_delimited_paths(buf + ld_library_path_offset, indent);
         }
 
         if (runpath == MAX_OFFSET_T) {
             fputs(indent, stdout);
-            if (color_output)
-                fputs(BRIGHT_BLACK, stdout);
-            fputs(" 3. runpath was not set\n", stdout);
+            fputs(color_output ? BRIGHT_BLACK " 3. runpath was not set" CLEAR
+                                              "\n"
+                               : " 3. runpath was not set\n",
+                  stdout);
         } else {
             fputs(indent, stdout);
-            if (color_output)
-                fputs(BRIGHT_BLACK, stdout);
-            fputs(" 3. runpath:\n", stdout);
+            fputs(color_output ? BRIGHT_BLACK " 3. runpath:" CLEAR "\n"
+                               : " 3. runpath:\n",
+                  stdout);
             print_colon_delimited_paths(buf + runpath_buf_offset, indent);
         }
 
         fputs(indent, stdout);
-        if (color_output)
-            fputs(BRIGHT_BLACK, stdout);
-        fputs(" 4. ld.so.conf:\n", stdout);
+        fputs(color_output ? BRIGHT_BLACK " 4. ld.so.conf:" CLEAR "\n"
+                           : " 4. ld.so.conf:\n",
+              stdout);
         print_colon_delimited_paths(buf + ld_so_conf_offset, indent);
 
         fputs(indent, stdout);
-        if (color_output)
-            fputs(BRIGHT_BLACK, stdout);
-        fputs(" 5. Standard paths:\n", stdout);
+        fputs(color_output ? BRIGHT_BLACK " 5. Standard paths:" CLEAR "\n"
+                           : " 5. Standard paths:\n",
+              stdout);
         print_colon_delimited_paths(buf + default_paths_offset, indent);
-
-        if (color_output)
-            fputs(CLEAR, stdout);
 
         buf_size = old_buf_size;
         free(indent);
