@@ -107,12 +107,43 @@ struct dyn_32 {
 #define DT_RUNPATH 29
 
 #define ERR_INVALID_MAGIC 1
-#define ERR_INVALID_CLASS 1
-#define ERR_INVALID_DATA 1
-#define ERR_UNSUPPORTED_ELF_FILE 1
-#define ERR_INVALID_HEADER 1
+#define ERR_INVALID_CLASS 2
+#define ERR_INVALID_DATA 3
+#define ERR_INVALID_HEADER 4
+#define ERR_INVALID_BITS 5
+#define ERR_UNSUPPORTED_ELF_FILE 6
+#define ERR_NO_EXEC_OR_DYN 7
+#define ERR_INVALID_PHOFF 8
+#define ERR_INVALID_PROG_HEADER 9
+#define ERR_CANT_STAT 10
+#define ERR_INVALID_DYNAMIC_SECTION 11
+#define ERR_INVALID_DYNAMIC_ARRAY_ENTRY 12
+#define ERR_NO_STRTAB 13
+#define ERR_INVALID_SONAME 14
+#define ERR_INVALID_RPATH 15
+#define ERR_INVALID_RUNPATH 16
+#define ERR_INVALID_NEEDED 17
 
 #define MAX_OFFSET_T 0xFFFFFFFFFFFFFFFF
+
+#define REGULAR_RED "\033[0;31m"
+#define BOLD_RED "\033[1;31m"
+#define CLEAR "\033[0m"
+#define BOLD_YELLOW "\033[33m"
+#define BOLD_CYAN "\033[1;36m"
+#define REGULAR_MAGENTA "\033[0;35m"
+#define REGULAR_BLUE "\033[0;34m"
+#define BRIGHT_BLACK "\033[0;90m"
+
+// don't judge me.
+#define LIGHT_HORIZONTAL "\xe2\x94\x80"
+#define LIGHT_QUADRUPLE_DASH_VERTICAL "\xe2\x94\x8a"
+#define LIGHT_UP_AND_RIGHT "\xe2\x94\x94"
+#define LIGHT_VERTICAL "\xe2\x94\x82"
+#define LIGHT_VERTICAL_AND_RIGHT "\xe2\x94\x9c"
+
+#define JUST_INDENT "    "
+#define LIGHT_VERTICAL_WITH_INDENT LIGHT_VERTICAL "   "
 
 typedef enum { EITHER, BITS32, BITS64 } elf_bits_t;
 
@@ -194,15 +225,16 @@ static void tree_preamble(int depth) {
 
     for (int i = 0; i < depth - 1; ++i) {
         if (found_all_needed[i])
-            fputs("    ", stdout);
+            fputs(JUST_INDENT, stdout);
         else
-            fputs("\xe2\x94\x82   ", stdout); // "│   "
+            fputs(LIGHT_VERTICAL_WITH_INDENT, stdout);
     }
 
     if (found_all_needed[depth - 1])
-        fputs("\xe2\x94\x94\xe2\x94\x80\xe2\x94\x80 ", stdout); // "└── "
+        fputs(LIGHT_UP_AND_RIGHT LIGHT_HORIZONTAL LIGHT_HORIZONTAL " ", stdout);
     else
-        fputs("\xe2\x94\x9c\xe2\x94\x80\xe2\x94\x80 ", stdout); // "├── "
+        fputs(LIGHT_VERTICAL_AND_RIGHT LIGHT_HORIZONTAL LIGHT_HORIZONTAL " ",
+              stdout);
 }
 
 static int recurse(char *current_file, int depth, struct libtree_options *opts,
@@ -349,7 +381,7 @@ static void print_colon_delimited_paths(char *start, char *indent) {
             *next = '\0';
 
         fputs(indent, stdout);
-        fputs("    ", stdout);
+        fputs(JUST_INDENT, stdout);
         puts(start);
 
         // We done yet?
@@ -360,6 +392,47 @@ static void print_colon_delimited_paths(char *start, char *indent) {
         *next = ':';
         start = next + 1;
     }
+}
+
+static void print_line(int depth, char *name, char *color, int highlight,
+                       struct found_t reason) {
+    tree_preamble(depth);
+    if (color_output)
+        fputs(color, stdout);
+    fputs(name, stdout);
+    if (color_output && highlight)
+        fputs(CLEAR " " BOLD_YELLOW, stdout);
+    else
+        putchar(' ');
+    switch (reason.how) {
+    case RPATH:
+        if (reason.depth + 1 == depth)
+            fputs("[rpath]", stdout);
+        else
+            printf("[rpath of %d]", reason.depth);
+        break;
+    case LD_LIBRARY_PATH:
+        fputs("[LD_LIBRARY_PATH]", stdout);
+        break;
+    case RUNPATH:
+        fputs("[runpath]", stdout);
+        break;
+    case LD_SO_CONF:
+        fputs("[ld.so.conf]", stdout);
+        break;
+    case DIRECT:
+        fputs("[direct]", stdout);
+        break;
+    case DEFAULT:
+        fputs("[default path]", stdout);
+        break;
+    default:
+        break;
+    }
+    if (color_output)
+        fputs(CLEAR "\n", stdout);
+    else
+        putchar('\n');
 }
 
 static int recurse(char *current_file, int depth, struct libtree_options *opts,
@@ -393,7 +466,7 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
 
     // Make sure that we have matching bits with dependent
     if (parent_bits != EITHER && parent_bits != curr_bits)
-        return 3;
+        return ERR_INVALID_BITS;
 
     // Make sure that the elf file has a the host's endianness
     // Byte swapping is on the TODO list
@@ -411,16 +484,16 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
         if (fread(&header.h64, sizeof(struct header_64), 1, fptr) != 1)
             return ERR_INVALID_HEADER;
         if (header.h64.e_type != ET_EXEC && header.h64.e_type != ET_DYN)
-            return 7;
+            return ERR_NO_EXEC_OR_DYN;
         if (fseek(fptr, header.h64.e_phoff, SEEK_SET) != 0)
-            return 8;
+            return ERR_INVALID_PHOFF;
     } else {
         if (fread(&header.h32, sizeof(struct header_32), 1, fptr) != 1)
             return ERR_INVALID_HEADER;
         if (header.h32.e_type != ET_EXEC && header.h32.e_type != ET_DYN)
-            return 7;
+            return ERR_NO_EXEC_OR_DYN;
         if (fseek(fptr, header.h32.e_phoff, SEEK_SET) != 0)
-            return 8;
+            return ERR_INVALID_PHOFF;
     }
 
     // Make sure it's an executable or library
@@ -447,7 +520,7 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
     if (curr_bits == BITS64) {
         for (uint64_t i = 0; i < header.h64.e_phnum; ++i) {
             if (fread(&prog.p64, sizeof(struct prog_64), 1, fptr) != 1)
-                return 9;
+                return ERR_INVALID_PROG_HEADER;
 
             if (prog.p64.p_type == PT_LOAD) {
                 *offsets_end++ = prog.p64.p_offset;
@@ -459,7 +532,7 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
     } else {
         for (uint32_t i = 0; i < header.h32.e_phnum; ++i) {
             if (fread(&prog.p32, sizeof(struct prog_32), 1, fptr) != 1)
-                return 9;
+                return ERR_INVALID_PROG_HEADER;
 
             if (prog.p32.p_type == PT_LOAD) {
                 *offsets_end++ = prog.p32.p_offset;
@@ -474,7 +547,7 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
     struct stat finfo;
     if (fstat(fileno(fptr), &finfo) != 0) {
         fclose(fptr);
-        return 54;
+        return ERR_CANT_STAT;
     }
 
     int seen_before = 0;
@@ -494,48 +567,14 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
 
     // No dynamic section? (TODO: handle this properly)
     if (p_offset == MAX_OFFSET_T) {
-        tree_preamble(depth);
-        if (color_output)
-            fputs("\033[1;36m", stdout);
-        fputs(current_file, stdout);
-        if (color_output)
-            fputs("\033[0m \033[0;33m", stdout);
-        switch (reason.how) {
-        case RPATH:
-            if (reason.depth + 1 == depth)
-                printf(" [rpath]");
-            else
-                printf(" [rpath of %d]", reason.depth);
-            break;
-        case LD_LIBRARY_PATH:
-            printf(" [LD_LIBRARY_PATH]");
-            break;
-        case RUNPATH:
-            printf(" [runpath]");
-            break;
-        case LD_SO_CONF:
-            printf(" [ld.so.conf]");
-            break;
-        case DIRECT:
-            printf(" [direct]");
-            break;
-        case DEFAULT:
-            printf(" [default path]");
-            break;
-        case INPUT:
-            break;
-        }
-        if (color_output)
-            fputs("\033[0m\n", stdout);
-        else
-            putchar('\n');
+        print_line(depth, current_file, BOLD_CYAN, 1, reason);
         fclose(fptr);
         return 0;
     }
 
     // Go to the dynamic section
     if (fseek(fptr, p_offset, SEEK_SET) != 0)
-        return 10;
+        return ERR_INVALID_DYNAMIC_SECTION;
 
     uint64_t strtab = MAX_OFFSET_T;
     uint64_t rpath = MAX_OFFSET_T;
@@ -553,14 +592,14 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
         if (curr_bits == BITS64) {
             struct dyn_64 dyn;
             if (fread(&dyn, sizeof(struct dyn_64), 1, fptr) != 1)
-                return 11;
+                return ERR_INVALID_DYNAMIC_ARRAY_ENTRY;
             d_tag = dyn.d_tag;
             d_val = dyn.d_val;
 
         } else {
             struct dyn_32 dyn;
             if (fread(&dyn, sizeof(struct dyn_32), 1, fptr) != 1)
-                return 11;
+                return ERR_INVALID_DYNAMIC_ARRAY_ENTRY;
             d_tag = dyn.d_tag;
             d_val = dyn.d_val;
         }
@@ -589,7 +628,7 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
     }
 
     if (strtab == MAX_OFFSET_T)
-        return 14;
+        return ERR_NO_STRTAB;
 
     // find the file offset corresponding to the strtab address
     uint64_t *offset_i = &offsets[0];
@@ -606,19 +645,14 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
 
     uint64_t strtab_offset = *offset_i - *addr_i + strtab;
 
-    // Current character
-    char c;
-
     // Copy the current soname
     size_t soname_buf_offset = buf_size;
     if (soname != MAX_OFFSET_T) {
         if (fseek(fptr, strtab_offset + soname, SEEK_SET) != 0) {
             buf_size = old_buf_size;
-            return 16;
+            return ERR_INVALID_SONAME;
         }
-        while ((c = getc(fptr)) != '\0' && c != EOF)
-            buf[buf_size++] = c;
-        buf[buf_size++] = '\0';
+        copy_from_file(fptr);
     }
 
     int in_exclude_list =
@@ -630,44 +664,13 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
         (!seen_before && in_exclude_list && opts->verbosity >= 2) ||
         opts->verbosity == 3;
 
+    // Just print the library and return
     if (!should_recurse) {
-        tree_preamble(depth);
-        if (color_output)
-            fputs(in_exclude_list ? "\033[0;35m" : "\033[0;34m", stdout);
-        if (soname != MAX_OFFSET_T && !opts->path) {
-            fputs(buf + soname_buf_offset, stdout);
-        } else {
-            fputs(current_file, stdout);
-        }
-        switch (reason.how) {
-        case RPATH:
-            if (reason.depth + 1 == depth)
-                fputs(" [rpath]", stdout);
-            else
-                printf(" [rpath of %d]", reason.depth);
-            break;
-        case LD_LIBRARY_PATH:
-            fputs(" [LD_LIBRARY_PATH]", stdout);
-            break;
-        case RUNPATH:
-            fputs(" [runpath]", stdout);
-            break;
-        case LD_SO_CONF:
-            fputs(" [ld.so.conf]", stdout);
-            break;
-        case DIRECT:
-            fputs(" [direct]", stdout);
-            break;
-        case DEFAULT:
-            fputs(" [default path]", stdout);
-            break;
-        default:
-            break;
-        }
-        if (color_output)
-            fputs("\033[0m\n", stdout);
-        else
-            putchar('\n');
+        char *print_name = soname != MAX_OFFSET_T && !opts->path
+                               ? buf + soname_buf_offset
+                               : current_file;
+        char *print_color = in_exclude_list ? REGULAR_MAGENTA : REGULAR_BLUE;
+        print_line(depth, print_name, print_color, 0, reason);
         fclose(fptr);
         goto success;
     }
@@ -696,7 +699,7 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
         rpath_offsets[depth] = buf_size;
         if (fseek(fptr, strtab_offset + rpath, SEEK_SET) != 0) {
             buf_size = old_buf_size;
-            return 1;
+            return ERR_INVALID_RPATH;
         }
 
         copy_from_file(fptr);
@@ -716,7 +719,7 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
     if (runpath != MAX_OFFSET_T) {
         if (fseek(fptr, strtab_offset + runpath, SEEK_SET) != 0) {
             buf_size = old_buf_size;
-            return 1;
+            return ERR_INVALID_RUNPATH;
         }
 
         copy_from_file(fptr);
@@ -736,60 +739,23 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
         needed_buf_offsets[i] = buf_size;
         if (fseek(fptr, strtab_offset + neededs[i], SEEK_SET) != 0) {
             buf_size = old_buf_size;
-            return 1;
+            return ERR_INVALID_NEEDED;
         }
         copy_from_file(fptr);
     }
 
     fclose(fptr);
 
-    // We have found something, so print it, maybe by soname.
-    tree_preamble(depth);
+    char *print_name = soname == MAX_OFFSET_T || opts->path
+                           ? current_file
+                           : (buf + soname_buf_offset);
 
-    if (color_output)
-        fputs(in_exclude_list ? "\033[0;35m"
-                              : seen_before ? "\033[0;34m" : "\033[1;36m",
-              stdout);
+    char *print_color = in_exclude_list
+                            ? REGULAR_MAGENTA
+                            : seen_before ? REGULAR_BLUE : BOLD_CYAN;
 
-    fputs(soname == MAX_OFFSET_T || opts->path ? current_file
-                                               : (buf + soname_buf_offset),
-          stdout);
-
-    // Highlight how it was found
-    if (color_output && !(seen_before || in_exclude_list))
-        fputs("\033[0m \033[33m", stdout);
-    else
-        putchar(' ');
-    switch (reason.how) {
-    case RPATH:
-        if (reason.depth + 1 == depth)
-            fputs("[rpath]", stdout);
-        else
-            printf("[rpath of %d]", reason.depth);
-        break;
-    case LD_LIBRARY_PATH:
-        fputs("[LD_LIBRARY_PATH]", stdout);
-        break;
-    case RUNPATH:
-        fputs("[runpath]", stdout);
-        break;
-    case DIRECT:
-        fputs("[direct]", stdout);
-        break;
-    case LD_SO_CONF:
-        fputs("[ld.so.conf]", stdout);
-        break;
-    case DEFAULT:
-        fputs("[default path]", stdout);
-        break;
-    case INPUT:
-        break;
-    }
-
-    if (color_output)
-        fputs("\033[0m\n", stdout);
-    else
-        putchar('\n');
+    int highlight = !seen_before && !in_exclude_list;
+    print_line(depth, print_name, print_color, highlight, reason);
 
     // Buffer for the full search path
     char path[4096];
@@ -829,11 +795,11 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
             if (name[0] != '/') {
                 tree_preamble(depth + 1);
                 if (color_output)
-                    fputs("\033[1;31m", stdout);
+                    fputs(BOLD_RED, stdout);
                 fputs(name, stdout);
                 fputs(" is not absolute", stdout);
                 if (color_output)
-                    fputs("\033[0m\n", stdout);
+                    fputs(CLEAR "\n", stdout);
                 else
                     putchar('\n');
             } else if (recurse(name, depth + 1, opts, curr_bits,
@@ -841,11 +807,11 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
                        0) {
                 tree_preamble(depth + 1);
                 if (color_output)
-                    fputs("\033[1;31m", stdout);
+                    fputs(BOLD_RED, stdout);
                 fputs(name, stdout);
                 fputs(" not found", stdout);
                 if (color_output)
-                    fputs("\033[0m\n", stdout);
+                    fputs(CLEAR "\n", stdout);
             }
 
             // Even if not officially found, we mark it as found, cause we
@@ -918,56 +884,59 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
         found_all_needed[depth] = i + 1 >= needed_not_found;
         tree_preamble(depth + 1);
         if (color_output)
-            fputs("\033[1;31m", stdout);
+            fputs(BOLD_RED, stdout);
         fputs(buf + needed_buf_offsets[i], stdout);
         fputs(" not found", stdout);
         if (color_output)
-            fputs("\033[0m\n", stdout);
+            fputs(CLEAR "\n", stdout);
         else
             putchar('\n');
     }
 
     // If anything was not found, we print the search paths in order they are
     // considered.
-    char *vertical_error_frame_color = "    \033[0;31m\xe2\x94\x8a\033[0m";
-    char *vertical_error_frame_nocolor = "    \xe2\x94\x8a";
-    char *vertical_error_frame = color_output ? vertical_error_frame_color
-                                              : vertical_error_frame_nocolor;
-    char *indent = malloc(6 * (depth - 1) + strlen(vertical_error_frame));
+    char *colored_box =
+        color_output
+            ? REGULAR_RED JUST_INDENT LIGHT_QUADRUPLE_DASH_VERTICAL CLEAR
+            : JUST_INDENT LIGHT_QUADRUPLE_DASH_VERTICAL;
+    char *indent = malloc((sizeof(LIGHT_VERTICAL_WITH_INDENT) - 1) * depth +
+                          strlen(colored_box));
     char *p = indent;
     for (int i = 0; i < depth - 1; ++i) {
         if (found_all_needed[i]) {
-            memcpy(p, "    ", 4);
-            p += 4;
+            int len = sizeof(JUST_INDENT) - 1;
+            memcpy(p, JUST_INDENT, len);
+            p += len;
         } else {
-            memcpy(p, "\xe2\x94\x82   ", 6);
-            p += 6;
+            int len = sizeof(LIGHT_VERTICAL_WITH_INDENT) - 1;
+            memcpy(p, LIGHT_VERTICAL_WITH_INDENT, len);
+            p += len;
         }
     }
     // dotted | in red
-    strcpy(p, vertical_error_frame);
+    strcpy(p, colored_box);
 
     fputs(indent, stdout);
     if (color_output)
-        fputs("\033[0;90m", stdout);
+        fputs(BRIGHT_BLACK, stdout);
     fputs(" Paths considered in this order:\n", stdout);
 
     // Consider rpaths only when runpath is empty
     if (runpath != MAX_OFFSET_T) {
         fputs(indent, stdout);
         if (color_output)
-            fputs("\033[0;90m", stdout);
+            fputs(BRIGHT_BLACK, stdout);
         fputs(" 1. rpath is skipped because runpath was set\n", stdout);
     } else {
         fputs(indent, stdout);
         if (color_output)
-            fputs("\033[0;90m", stdout);
+            fputs(BRIGHT_BLACK, stdout);
         fputs(" 1. rpath:\n", stdout);
         for (int j = depth; j >= 0; --j) {
             if (rpath_offsets[j] != SIZE_MAX) {
                 fputs(indent, stdout);
                 if (color_output)
-                    fputs("\033[0;90m", stdout);
+                    fputs(BRIGHT_BLACK, stdout);
                 printf("    depth %d\n", j);
                 print_colon_delimited_paths(buf + rpath_offsets[j], indent);
             }
@@ -977,12 +946,12 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
     if (ld_library_path_offset == SIZE_MAX) {
         fputs(indent, stdout);
         if (color_output)
-            fputs("\033[0;90m", stdout);
+            fputs(BRIGHT_BLACK, stdout);
         fputs(" 2. LD_LIBRARY_PATH was not set\n", stdout);
     } else {
         fputs(indent, stdout);
         if (color_output)
-            fputs("\033[0;90m", stdout);
+            fputs(BRIGHT_BLACK, stdout);
         fputs(" 2. LD_LIBRARY_PATH:\n", stdout);
         print_colon_delimited_paths(buf + ld_library_path_offset, indent);
     }
@@ -990,34 +959,35 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
     if (runpath == MAX_OFFSET_T) {
         fputs(indent, stdout);
         if (color_output)
-            fputs("\033[0;90m", stdout);
+            fputs(BRIGHT_BLACK, stdout);
         fputs(" 3. runpath was not set\n", stdout);
     } else {
         fputs(indent, stdout);
         if (color_output)
-            fputs("\033[0;90m", stdout);
+            fputs(BRIGHT_BLACK, stdout);
         fputs(" 3. runpath:\n", stdout);
         print_colon_delimited_paths(buf + runpath_buf_offset, indent);
     }
 
     fputs(indent, stdout);
     if (color_output)
-        fputs("\033[0;90m", stdout);
+        fputs(BRIGHT_BLACK, stdout);
     fputs(" 4. ld.so.conf:\n", stdout);
     print_colon_delimited_paths(buf + ld_so_conf_offset, indent);
 
     fputs(indent, stdout);
     if (color_output)
-        fputs("\033[0;90m", stdout);
+        fputs(BRIGHT_BLACK, stdout);
     fputs(" 5. Standard paths:\n", stdout);
     print_colon_delimited_paths(buf + default_paths_offset, indent);
 
     if (color_output)
-        fputs("\033[0m", stdout);
+        fputs(CLEAR, stdout);
 
     free(indent);
 
 success:
+    // Free memory in our string table
     buf_size = old_buf_size;
     return 0;
 }
@@ -1174,16 +1144,18 @@ static int print_tree(int pathc, char **pathv, struct libtree_options *opts) {
 
     set_default_paths();
 
-    int code = 0;
+    int last_error = 0;
 
     for (int i = 0; i < pathc; ++i) {
-        code |= recurse(pathv[i], 0, opts, EITHER,
-                        (struct found_t){.how = INPUT, .depth = 0});
+        int result = recurse(pathv[i], 0, opts, EITHER,
+                             (struct found_t){.how = INPUT, .depth = 0});
+        if (result != 0)
+            last_error = result;
     }
 
     free(buf);
 
-    return code;
+    return last_error;
 }
 
 int main(int argc, char **argv) {
@@ -1254,7 +1226,7 @@ int main(int argc, char **argv) {
                 ++opts.verbosity;
                 break;
             default:
-                fprintf(stderr, "Unrecognized flag `-%c`!\n", *arg);
+                fprintf(stderr, "Unrecognized flag `-%c`\n", *arg);
                 return 1;
             }
         }
