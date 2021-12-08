@@ -4,7 +4,6 @@ libtree in C
 - faster (only reads the bare minimum from elf files)
 
 todo:
-- dynamic size string buffers
 - $LIB and $PLATFORM substitution in rpath.
 - byte swapping for non-native endianness.
 - bundling
