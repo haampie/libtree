@@ -148,9 +148,9 @@ struct dyn_32 {
 #define JUST_INDENT "    "
 #define LIGHT_VERTICAL_WITH_INDENT LIGHT_VERTICAL "   "
 
-#define SMALL_VEC_SIZE 1
+#define SMALL_VEC_SIZE 16
 #define MAX_RECURSION_DEPTH 32
-#define MAX_VISITED_FILES 256
+#define MAX_VISITED_FILES 1024
 
 typedef enum { EITHER, BITS32, BITS64 } elf_bits_t;
 
@@ -402,70 +402,78 @@ static void check_search_paths(struct found_t reason, size_t offset,
     }
 }
 
-static int interpolate_variables(char *dst, char *src, char *ORIGIN, char *LIB,
-                                 char *PLATFORM) {
-    // We do *not* write to dst if there is no variable
-    // in th src string -- this is a small optimization,
-    // cause it's unlikely we find variables (at least,
-    // I think).
-    char *not_yet_copied = src;
-    char *p_src = src;
-    char *p_dst = dst;
+static int interpolate_variables(size_t src, char const *ORIGIN, char const *LIB,
+                                 char const *PLATFORM) {
+    // We do not write to dst if there is no variables to interpolate.
+    size_t prev_src = src;
+    size_t curr_src = src;
 
-    while ((p_src = strchr(p_src, '$')) != NULL) {
-        // Number of bytes before the dollar.
-        size_t n = p_src - not_yet_copied;
+    while (1) {
+        // Find the next potential variable.
+        char *dollar = strchr(&buf[curr_src], '$');
+        if (dollar == NULL)
+            break;
+        curr_src = dollar - buf;
+
+        size_t bytes_to_dollar = curr_src - prev_src;
 
         // Go past the dollar.
-        ++p_src;
+        ++curr_src;
 
-        // what to copy over.
-        char *var_val = NULL;
+        // Remember if we have to look for matching curly braces.
+        int curly = 0;
+        if (buf[curr_src] == '{') {
+            curly = 1;
+            ++curr_src;
+        }
 
-        // Then check if it's a {ORIGIN} / ORIGIN.
-        if (strncmp(p_src, "{ORIGIN}", 8) == 0) {
+        // String to interpolate.
+        char const *var_val = NULL;
+        if (strncmp(&buf[curr_src], "ORIGIN", 6) == 0) {
             var_val = ORIGIN;
-            p_src += 8;
-        } else if (strncmp(p_src, "ORIGIN", 6) == 0) {
-            var_val = ORIGIN;
-            p_src += 6;
-        } else if (strncmp(p_src, "{LIB}", 5) == 0) {
+            curr_src += 6;
+        } else if (strncmp(&buf[curr_src], "LIB", 3) == 0) {
             var_val = LIB;
-            p_src += 5;
-        } else if (strncmp(p_src, "LIB", 3) == 0) {
-            var_val = LIB;
-            p_src += 3;
-        } else if (strncmp(p_src, "{PLATFORM}", 10) == 0) {
+            curr_src += 3;
+        } else if (strncmp(&buf[curr_src], "PLATFORM", 8) == 0) {
             var_val = PLATFORM;
-            p_src += 10;
-        } else if (strncmp(p_src, "PLATFORM", 8) == 0) {
-            var_val = PLATFORM;
-            p_src += 8;
+            curr_src += 8;
         } else {
             continue;
         }
 
-        // First copy over the string until the variable.
-        memcpy(p_dst, not_yet_copied, n);
-        p_dst += n;
+        // Require matching {...}.
+        if (curly) {
+            if (buf[curr_src] != '}') {
+                continue;
+            }
+            ++curr_src;
+        }
 
-        // Then set not_yet_copied *after* the variable.
-        not_yet_copied = p_src;
+        size_t var_len = strlen(var_val);
+
+        // Make sure we have enough space to write to.
+        maybe_grow_string_buffer(bytes_to_dollar + var_len);
+
+        // First copy over the string until the variable.
+        memcpy(&buf[buf_size], &buf[prev_src], bytes_to_dollar);
+        buf_size += bytes_to_dollar;
+
+        // Then move prev_src until after the variable.
+        prev_src = curr_src;
 
         // Then copy the variable value (without null).
-        size_t var_len = strlen(var_val);
-        memcpy(p_dst, var_val, var_len);
-        p_dst += var_len;
+        memcpy(&buf[buf_size], var_val, var_len);
+        buf_size += var_len;
     }
 
     // Did we copy anything? That implies a variable was interpolated.
     // Copy the remainder, including the \0.
-    if (not_yet_copied != src) {
-        char *end = strchr(src, '\0');
-        size_t remainder = end - not_yet_copied + 1;
-        memcpy(p_dst, not_yet_copied, remainder);
-        p_dst += remainder;
-        return p_dst - dst;
+    if (prev_src != src) {
+        size_t remaining = strlen(&buf[prev_src]) + 1;
+        memcpy(&buf[buf_size], &buf[prev_src], remaining);
+        buf_size += remaining;
+        return 1;
     }
 
     return 0;
@@ -977,10 +985,8 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
         memcpy(origin, current_file, bytes);
         origin[bytes + 1] = '\0';
     } else {
-        // this only happens when the input is relative
-        origin[0] = '.';
-        origin[1] = '/';
-        origin[2] = '\0';
+        // this only happens when the input is relative (e.g. in current dir)
+        memcpy(origin, "./", 3);
     }
 
     // Copy DT_PRATH
@@ -998,12 +1004,10 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
         copy_from_file(fptr);
 
         // We store the interpolated string right after the literal copy.
-        size_t bytes_written =
-            interpolate_variables(buf + buf_size, buf + rpath_offsets[depth],
-                                  origin, "LIB", "x86_64");
-        if (bytes_written > 0) {
-            rpath_offsets[depth] = buf_size;
-            buf_size += bytes_written;
+        size_t curr_buf_size = buf_size;
+        if (interpolate_variables(rpath_offsets[depth], origin, "LIB",
+                                  "x86_64")) {
+            rpath_offsets[depth] = curr_buf_size;
         }
     }
 
@@ -1020,11 +1024,10 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
         copy_from_file(fptr);
 
         // We store the interpolated string right after the literal copy.
-        size_t bytes_written = interpolate_variables(
-            buf + buf_size, buf + runpath_buf_offset, origin, "LIB", "x86_64");
-        if (bytes_written > 0) {
-            runpath_buf_offset = buf_size;
-            buf_size += bytes_written;
+        size_t curr_buf_size = buf_size;
+        if (interpolate_variables(runpath_buf_offset, origin, "LIB",
+                                  "x86_64")) {
+            runpath_buf_offset = curr_buf_size;
         }
     }
 
