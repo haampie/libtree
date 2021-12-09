@@ -598,7 +598,7 @@ static void print_error(int depth, size_t needed_not_found,
             fputs(CLEAR, stdout);
     } else {
         fputs(color_output ? BRIGHT_BLACK " 1. rpath:" CLEAR "\n"
-                           : " 1. rpath:",
+                           : " 1. rpath:\n",
               stdout);
         for (int j = depth; j >= 0; --j) {
             if (rpath_offsets[j] != SIZE_MAX) {
