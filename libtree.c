@@ -1,7 +1,7 @@
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #include <ctype.h>
 #include <glob.h>
@@ -245,9 +245,6 @@ static void small_vec_u64_append(struct small_vec_u64 *v, uint64_t val) {
 static void small_vec_u64_free(struct small_vec_u64 *v) {
     if (v->n <= SMALL_VEC_SIZE)
         return;
-    if (v->p == NULL) {
-        printf("freeing null?\n");
-    }
     free(v->p);
     v->p = NULL;
 }
@@ -799,7 +796,7 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
 
     // At this point we're going to store the file as "success"
     struct stat finfo;
-    if (fstat(fileno(fptr), &finfo) != 0) {
+    if (stat(current_file, &finfo) != 0) {
         fclose(fptr);
         small_vec_u64_free(&pt_load_offset);
         small_vec_u64_free(&pt_load_vaddr);
@@ -1213,12 +1210,21 @@ static int parse_ld_config_file(char *path) {
     if (fptr == NULL)
         return 1;
 
-    size_t len;
-    ssize_t nread;
-    char *line = NULL;
+    char c = '0';
+    char line[4096];
 
-    while ((nread = getline(&line, &len, fptr)) != -1) {
+    while (c != EOF) {
+        size_t line_len = 0;
+        while ((c = getc(fptr)) != '\n' && c != EOF) {
+            if (line_len < 4095) {
+                line[line_len++] = c;
+            }
+        }
+
+        line[line_len] = '\0';
+
         char *begin = line;
+        char *end = line + line_len;
         // Remove leading whitespace
         for (; isspace(*begin); ++begin) {
         }
@@ -1227,9 +1233,6 @@ static int parse_ld_config_file(char *path) {
         char *comment = strchr(begin, '#');
         if (comment != NULL)
             *comment = '\0';
-
-        // Go to the last character in the line
-        char *end = strchr(begin, '\0');
 
         // Remove trailing whitespace
         // although, whitespace is technically allowed in paths :think:
@@ -1268,7 +1271,6 @@ static int parse_ld_config_file(char *path) {
         }
     }
 
-    free(line);
     fclose(fptr);
 
     return 0;
