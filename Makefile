@@ -2,8 +2,7 @@ ifeq (exists, $(shell [ -e $(CURDIR)/Make.user ] && echo exists ))
 include $(CURDIR)/Make.user
 endif
 
-# we're using fileno and getline gnu extensions
-LIBTREE_CFLAGS := -Wall -O2 -std=gnu99 -D_FILE_OFFSET_BITS=64 $(CFLAGS)
+LIBTREE_CFLAGS := -Wall -O2 -std=c99 -D_FILE_OFFSET_BITS=64 $(CFLAGS)
 
 all: libtree
 
