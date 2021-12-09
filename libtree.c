@@ -471,6 +471,7 @@ static int interpolate_variables(size_t src, char const *ORIGIN, char const *LIB
     // Copy the remainder, including the \0.
     if (prev_src != src) {
         size_t remaining = strlen(&buf[prev_src]) + 1;
+        maybe_grow_string_buffer(remaining);
         memcpy(&buf[buf_size], &buf[prev_src], remaining);
         buf_size += remaining;
         return 1;
