@@ -615,6 +615,8 @@ static void print_error(int depth, size_t needed_not_found,
                 if (color_output)
                     fputs(BRIGHT_BLACK, stdout);
                 printf("    depth %d\n", j);
+                if (color_output)
+                    fputs(CLEAR, stdout);
                 print_colon_delimited_paths(buf + rpath_offsets[j], indent);
             }
         }
