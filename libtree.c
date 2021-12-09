@@ -1163,7 +1163,8 @@ static int recurse(char *current_file, int depth, struct libtree_options *opts,
         buf_size = old_buf_size;
         small_vec_u64_free(&needed_buf_offsets);
         small_vec_u64_free(&needed);
-        return ERR_NOT_FOUND;
+        // return ERR_NOT_FOUND;
+        return 0;
     }
 
     // Free memory in our string table
