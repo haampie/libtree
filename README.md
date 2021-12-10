@@ -1,15 +1,13 @@
-libtree in C
-- incomplete rewrite of `libtree`
-- simpler to build (written in C, make as build system)
-- faster (only reads the bare minimum from elf files)
+# libtree
 
-todo:
-- byte swapping for non-native endianness.
-- bundling
+A tool that:
+- :deciduous_tree: turns `ldd` into a tree
+- :point_up: explains how shared libraries are found or why they cannot be located
 
-don't-try-this-at-home install instructions:
+## Installation
+
+`libtree` requires a C compiler that understands c99:
 
 ```
 curl -Lfs https://raw.githubusercontent.com/haampie/libtree-in-c/master/libtree.c | cc -o libtree -x c -
 ```
-
