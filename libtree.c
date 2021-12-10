@@ -28,6 +28,21 @@ static inline int host_is_little_endian() {
     return bytes[0] == 1;
 }
 
+static inline void utoa(char *str, unsigned int v) {
+    char * p = str;
+    do {
+        *p++ = '0' + (v % 10);
+        v /= 10;
+    } while (v > 0);
+    size_t len = p - str;
+    for (size_t i = 0; i < len/2; i++) {
+        char tmp = str[i];
+        str[i] = str[len - i - 1];
+        str[len - i - 1] = tmp;
+    }
+    str[len] = '\0';
+}
+
 struct header_64 {
     uint16_t e_type;
     uint16_t e_machine;
@@ -169,7 +184,7 @@ struct found_t {
     // only set when found by in the rpath NOT of the direct parent.  so, when
     // it is found in a "special" way only rpaths allow, which is worth
     // informing the user about.
-    int depth;
+    unsigned int depth;
 };
 
 // large buffer in which to copy rpaths, needed libraries and sonames.
@@ -321,11 +336,11 @@ static int is_in_exclude_list(char *soname) {
     return 0;
 }
 
-static void tree_preamble(int depth) {
+static void tree_preamble(unsigned int depth) {
     if (depth == 0)
         return;
 
-    for (int i = 0; i < depth - 1; ++i) {
+    for (unsigned int i = 0; i < depth - 1; ++i) {
         fputs(found_all_needed[i] ? JUST_INDENT : LIGHT_VERTICAL_WITH_INDENT,
               stdout);
     }
@@ -336,13 +351,13 @@ static void tree_preamble(int depth) {
           stdout);
 }
 
-static int recurse(char *current_file, int depth, struct libtree_options *opts,
+static int recurse(char *current_file, unsigned int depth, struct libtree_options *opts,
                    elf_bits_t bits, struct found_t reason);
 
 static void check_search_paths(struct found_t reason, size_t offset,
                                size_t *needed_not_found,
                                struct small_vec_u64 *needed_buf_offsets,
-                               int depth, struct libtree_options *opts,
+                               unsigned int depth, struct libtree_options *opts,
                                elf_bits_t bits) {
     char path[4096];
     char *path_end = path + 4096;
@@ -493,7 +508,7 @@ static void print_colon_delimited_paths(char *start, char *indent) {
         }
 
         // If we have found a :, then replace it with a \0
-        // so that we can use printf.
+        // so that we can use fputs.
         if (next != NULL)
             *next = '\0';
 
@@ -511,7 +526,7 @@ static void print_colon_delimited_paths(char *start, char *indent) {
     }
 }
 
-static void print_line(int depth, char *name, char *color, int highlight,
+static void print_line(unsigned int depth, char *name, char *color, int highlight,
                        struct found_t reason) {
     tree_preamble(depth);
     if (color_output)
@@ -523,10 +538,15 @@ static void print_line(int depth, char *name, char *color, int highlight,
         putchar(' ');
     switch (reason.how) {
     case RPATH:
-        if (reason.depth + 1 == depth)
+        if (reason.depth + 1 == depth) {
             fputs("[rpath]", stdout);
-        else
-            printf("[rpath of %d]", reason.depth);
+        } else {
+            char num[8];
+            utoa(num, reason.depth);
+            fputs("[rpath of ", stdout);
+            fputs(buf, stdout);
+            putchar('\n');
+        }
         break;
     case LD_LIBRARY_PATH:
         fputs("[LD_LIBRARY_PATH]", stdout);
@@ -552,7 +572,7 @@ static void print_line(int depth, char *name, char *color, int highlight,
         putchar('\n');
 }
 
-static void print_error(int depth, size_t needed_not_found,
+static void print_error(unsigned int depth, size_t needed_not_found,
                         struct small_vec_u64 *needed_buf_offsets,
                         char *runpath) {
     for (size_t i = 0; i < needed_not_found; ++i) {
@@ -608,10 +628,13 @@ static void print_error(int depth, size_t needed_not_found,
               stdout);
         for (int j = depth; j >= 0; --j) {
             if (rpath_offsets[j] != SIZE_MAX) {
+                char num[8];
+                utoa(num, j);
                 fputs(indent, stdout);
                 if (color_output)
                     fputs(BRIGHT_BLACK, stdout);
-                printf("    depth %d\n", j);
+                fputs("    depth ", stdout);
+                fputs(num, stdout);
                 if (color_output)
                     fputs(CLEAR, stdout);
                 print_colon_delimited_paths(buf + rpath_offsets[j], indent);
@@ -659,7 +682,7 @@ static void print_error(int depth, size_t needed_not_found,
     free(indent);
 }
 
-static int recurse(char *current_file, int depth, struct libtree_options *opts,
+static int recurse(char *current_file, unsigned int depth, struct libtree_options *opts,
                    elf_bits_t parent_bits, struct found_t reason) {
     FILE *fptr = fopen(current_file, "rb");
     if (fptr == NULL)
@@ -1391,7 +1414,9 @@ int main(int argc, char **argv) {
             } else if (strcmp(arg, "help") == 0) {
                 opt_help = 1;
             } else {
-                fprintf(stderr, "Unrecognized flag `--%s`\n", arg);
+                fputs("Unrecognized flag `--", stderr);
+                fputs(arg, stderr);
+                fputs("`\n", stderr);
                 return 1;
             }
 
@@ -1411,7 +1436,9 @@ int main(int argc, char **argv) {
                 ++opts.verbosity;
                 break;
             default:
-                fprintf(stderr, "Unrecognized flag `-%c`\n", *arg);
+                fputs("Unrecognized flag `-", stderr);
+                fputs(arg, stderr);
+                fputs("`\n", stderr);
                 return 1;
             }
         }
