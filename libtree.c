@@ -1,7 +1,7 @@
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 
 #include <ctype.h>
 #include <glob.h>
@@ -399,8 +399,8 @@ static void check_search_paths(struct found_t reason, size_t offset,
     }
 }
 
-static int interpolate_variables(size_t src, char const *ORIGIN, char const *LIB,
-                                 char const *PLATFORM) {
+static int interpolate_variables(size_t src, char const *ORIGIN,
+                                 char const *LIB, char const *PLATFORM) {
     // We do not write to dst if there is no variables to interpolate.
     size_t prev_src = src;
     size_t curr_src = src;
