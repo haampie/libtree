@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <glob.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 // TODO: rpath substitution ${LIB} / $LIB / ${PLATFORM} / $PLATFORM
