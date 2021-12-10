@@ -7,10 +7,8 @@
 #include <glob.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/utsname.h>
 #include <unistd.h>
-
-// TODO: rpath substitution ${LIB} / $LIB / ${PLATFORM} / $PLATFORM
-//       just have to work out how to get the proper LIB/PLATFORM values.
 
 // Libraries we do not show by default -- this reduces the verbosity quite a
 // bit.
@@ -21,6 +19,9 @@ char const *exclude_list[] = {
 struct libtree_options {
     int verbosity;
     int path;
+    // rpath substitutions
+    char *PLATFORM;
+    char *LIB;
 };
 
 static inline int host_is_little_endian() {
@@ -30,13 +31,13 @@ static inline int host_is_little_endian() {
 }
 
 static inline void utoa(char *str, unsigned int v) {
-    char * p = str;
+    char *p = str;
     do {
         *p++ = '0' + (v % 10);
         v /= 10;
     } while (v > 0);
     size_t len = p - str;
-    for (size_t i = 0; i < len/2; i++) {
+    for (size_t i = 0; i < len / 2; i++) {
         char tmp = str[i];
         str[i] = str[len - i - 1];
         str[len - i - 1] = tmp;
@@ -352,8 +353,9 @@ static void tree_preamble(unsigned int depth) {
           stdout);
 }
 
-static int recurse(char *current_file, unsigned int depth, struct libtree_options *opts,
-                   elf_bits_t bits, struct found_t reason);
+static int recurse(char *current_file, unsigned int depth,
+                   struct libtree_options *opts, elf_bits_t bits,
+                   struct found_t reason);
 
 static void check_search_paths(struct found_t reason, size_t offset,
                                size_t *needed_not_found,
@@ -416,7 +418,7 @@ static void check_search_paths(struct found_t reason, size_t offset,
 }
 
 static int interpolate_variables(size_t src, char const *ORIGIN,
-                                 char const *LIB, char const *PLATFORM) {
+                                 struct libtree_options *opts) {
     // We do not write to dst if there is no variables to interpolate.
     size_t prev_src = src;
     size_t curr_src = src;
@@ -446,10 +448,10 @@ static int interpolate_variables(size_t src, char const *ORIGIN,
             var_val = ORIGIN;
             curr_src += 6;
         } else if (strncmp(&buf[curr_src], "LIB", 3) == 0) {
-            var_val = LIB;
+            var_val = opts->LIB;
             curr_src += 3;
         } else if (strncmp(&buf[curr_src], "PLATFORM", 8) == 0) {
-            var_val = PLATFORM;
+            var_val = opts->PLATFORM;
             curr_src += 8;
         } else {
             continue;
@@ -527,8 +529,8 @@ static void print_colon_delimited_paths(char *start, char *indent) {
     }
 }
 
-static void print_line(unsigned int depth, char *name, char *color, int highlight,
-                       struct found_t reason) {
+static void print_line(unsigned int depth, char *name, char *color,
+                       int highlight, struct found_t reason) {
     tree_preamble(depth);
     if (color_output)
         fputs(color, stdout);
@@ -683,8 +685,9 @@ static void print_error(unsigned int depth, size_t needed_not_found,
     free(indent);
 }
 
-static int recurse(char *current_file, unsigned int depth, struct libtree_options *opts,
-                   elf_bits_t parent_bits, struct found_t reason) {
+static int recurse(char *current_file, unsigned int depth,
+                   struct libtree_options *opts, elf_bits_t parent_bits,
+                   struct found_t reason) {
     FILE *fptr = fopen(current_file, "rb");
     if (fptr == NULL)
         return 1;
@@ -1029,10 +1032,8 @@ static int recurse(char *current_file, unsigned int depth, struct libtree_option
 
         // We store the interpolated string right after the literal copy.
         size_t curr_buf_size = buf_size;
-        if (interpolate_variables(rpath_offsets[depth], origin, "LIB",
-                                  "x86_64")) {
+        if (interpolate_variables(rpath_offsets[depth], origin, opts))
             rpath_offsets[depth] = curr_buf_size;
-        }
     }
 
     // Copy DT_RUNPATH
@@ -1049,10 +1050,8 @@ static int recurse(char *current_file, unsigned int depth, struct libtree_option
 
         // We store the interpolated string right after the literal copy.
         size_t curr_buf_size = buf_size;
-        if (interpolate_variables(runpath_buf_offset, origin, "LIB",
-                                  "x86_64")) {
+        if (interpolate_variables(runpath_buf_offset, origin, opts))
             runpath_buf_offset = curr_buf_size;
-        }
     }
 
     // Copy needed libraries.
@@ -1377,6 +1376,18 @@ int main(int argc, char **argv) {
 
     // Default values.
     struct libtree_options opts = {.verbosity = 0, .path = 0};
+
+    struct utsname uname_val;
+    if (uname(&uname_val) != 0)
+        return 1;
+
+    // Technically this should be AT_PLATFORM, but
+    // (a) the feature is rarely used
+    // (b) it's almost always the same
+    opts.PLATFORM = uname_val.machine;
+
+    // Unclear how to detect this at runtime
+    opts.LIB = "lib";
 
     int opt_help = 0;
     int opt_version = 0;
