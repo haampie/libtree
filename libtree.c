@@ -13,8 +13,8 @@
 // Libraries we do not show by default -- this reduces the verbosity quite a
 // bit.
 char const *exclude_list[] = {
-    "libc.so",      "libpthread.so",      "libm.so", "libgcc_s.so",
-    "libstdc++.so", "ld-linux-x86-64.so", "libdl.so"};
+    "libc.so",      "libpthread.so",      "libm.so",  "libgcc_s.so",
+    "libstdc++.so", "ld-linux-x86-64.so", "libdl.so", "libc.musl-x86_64.so"};
 
 struct libtree_options {
     int verbosity;
@@ -554,14 +554,14 @@ static void print_line(unsigned int depth, char *name, char *color_bold,
         putchar(' ');
     switch (reason.how) {
     case RPATH:
-        if (reason.depth + 1 == depth) {
+        if (reason.depth + 1 >= depth) {
             fputs("[rpath]", stdout);
         } else {
             char num[8];
-            utoa(num, reason.depth);
+            utoa(num, reason.depth + 1);
             fputs("[rpath of ", stdout);
             fputs(num, stdout);
-            fputs("]\n", stdout);
+            putchar(']');
         }
         break;
     case LD_LIBRARY_PATH:
@@ -645,7 +645,7 @@ static void print_error(unsigned int depth, size_t needed_not_found,
         for (int j = depth; j >= 0; --j) {
             if (rpath_offsets[j] != SIZE_MAX) {
                 char num[8];
-                utoa(num, j);
+                utoa(num, j + 1);
                 fputs(indent, stdout);
                 if (color_output)
                     fputs(BRIGHT_BLACK, stdout);
