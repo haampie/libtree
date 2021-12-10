@@ -1282,8 +1282,11 @@ static void parse_ld_so_conf() {
 
     // Replace the last semicolon with a '\0'
     // if we have a nonzero number of paths.
-    if (buf_size > ld_so_conf_offset)
+    if (buf_size > ld_so_conf_offset) {
         buf[buf_size - 1] = '\0';
+    } else {
+        store_string("");
+    }
 }
 
 static void parse_ld_library_path() {
