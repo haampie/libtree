@@ -506,7 +506,7 @@ static int interpolate_variables(struct libtree_state_t *s, size_t src,
     return 0;
 }
 
-static void print_colon_delimited_paths(char *start, char *indent) {
+static void print_colon_delimited_paths(char const *start, char const *indent) {
     while (1) {
         // Don't print empty string
         if (*start == '\0')
@@ -521,21 +521,22 @@ static void print_colon_delimited_paths(char *start, char *indent) {
             continue;
         }
 
-        // If we have found a :, then replace it with a \0
-        // so that we can use fputs.
-        if (next != NULL)
-            *next = '\0';
-
         fputs(indent, stdout);
         fputs(JUST_INDENT, stdout);
-        puts(start);
+
+        // Print up to but not including : or \0, followed by a newline.
+        if (next == NULL) {
+            puts(start);
+        } else {
+            fwrite(start, 1, next - start, stdout);
+            putchar('\n');
+        }
 
         // We done yet?
         if (next == NULL)
             break;
 
         // Otherwise put the : back in place and continue.
-        *next = ':';
         start = next + 1;
     }
 }
