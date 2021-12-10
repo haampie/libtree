@@ -151,9 +151,11 @@ struct dyn_32 {
 #define CLEAR "\033[0m"
 #define BOLD_YELLOW "\033[33m"
 #define BOLD_CYAN "\033[1;36m"
+#define REGULAR_CYAN "\033[0;36m"
 #define REGULAR_MAGENTA "\033[0;35m"
 #define REGULAR_BLUE "\033[0;34m"
 #define BRIGHT_BLACK "\033[0;90m"
+#define REGULAR "\033[0m"
 
 // don't judge me.
 #define LIGHT_HORIZONTAL "\xe2\x94\x80"
@@ -529,12 +531,23 @@ static void print_colon_delimited_paths(char *start, char *indent) {
     }
 }
 
-static void print_line(unsigned int depth, char *name, char *color,
-                       int highlight, struct found_t reason) {
+static void print_line(unsigned int depth, char *name, char *color_bold,
+                       char *color_regular, int highlight,
+                       struct found_t reason) {
     tree_preamble(depth);
-    if (color_output)
-        fputs(color, stdout);
-    fputs(name, stdout);
+    // Color the filename different than the path name, if we have a path.
+    char *slash = NULL;
+    if (color_output && highlight && (slash = strrchr(name, '/')) != NULL) {
+        fputs(color_regular, stdout);
+        fwrite(name, 1, slash + 1 - name, stdout);
+        fputs(color_bold, stdout);
+        fputs(slash + 1, stdout);
+    } else {
+        if (color_output)
+            fputs(color_bold, stdout);
+
+        fputs(name, stdout);
+    }
     if (color_output && highlight)
         fputs(CLEAR " " BOLD_YELLOW, stdout);
     else
@@ -547,8 +560,8 @@ static void print_line(unsigned int depth, char *name, char *color,
             char num[8];
             utoa(num, reason.depth);
             fputs("[rpath of ", stdout);
-            fputs(buf, stdout);
-            putchar('\n');
+            fputs(num, stdout);
+            fputs("]\n", stdout);
         }
         break;
     case LD_LIBRARY_PATH:
@@ -847,7 +860,7 @@ static int recurse(char *current_file, unsigned int depth,
 
     // No dynamic section?
     if (p_offset == MAX_OFFSET_T) {
-        print_line(depth, current_file, BOLD_CYAN, 1, reason);
+        print_line(depth, current_file, BOLD_CYAN, REGULAR_CYAN, 1, reason);
         fclose(fptr);
         small_vec_u64_free(&pt_load_offset);
         small_vec_u64_free(&pt_load_vaddr);
@@ -994,8 +1007,9 @@ static int recurse(char *current_file, unsigned int depth,
         char *print_name = soname != MAX_OFFSET_T && !opts->path
                                ? buf + soname_buf_offset
                                : current_file;
-        char *print_color = in_exclude_list ? REGULAR_MAGENTA : REGULAR_BLUE;
-        print_line(depth, print_name, print_color, 0, reason);
+        char *bold_color = in_exclude_list ? REGULAR_MAGENTA : REGULAR_BLUE;
+        char *regular_color = in_exclude_list ? REGULAR_MAGENTA : REGULAR_BLUE;
+        print_line(depth, print_name, bold_color, regular_color, 0, reason);
 
         buf_size = old_buf_size;
         fclose(fptr);
@@ -1076,12 +1090,14 @@ static int recurse(char *current_file, unsigned int depth,
                            ? current_file
                            : (buf + soname_buf_offset);
 
-    char *print_color = in_exclude_list
-                            ? REGULAR_MAGENTA
-                            : seen_before ? REGULAR_BLUE : BOLD_CYAN;
+    char *bold_color = in_exclude_list ? REGULAR_MAGENTA
+                                       : seen_before ? REGULAR_BLUE : BOLD_CYAN;
+    char *regular_color = in_exclude_list
+                              ? REGULAR_MAGENTA
+                              : seen_before ? REGULAR_BLUE : REGULAR_CYAN;
 
     int highlight = !seen_before && !in_exclude_list;
-    print_line(depth, print_name, print_color, highlight, reason);
+    print_line(depth, print_name, bold_color, regular_color, highlight, reason);
 
     // Finally start searching.
 
