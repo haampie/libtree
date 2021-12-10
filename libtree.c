@@ -10,105 +10,6 @@
 #include <sys/utsname.h>
 #include <unistd.h>
 
-// Libraries we do not show by default -- this reduces the verbosity quite a
-// bit.
-char const *exclude_list[] = {
-    "libc.so",      "libpthread.so",      "libm.so",  "libgcc_s.so",
-    "libstdc++.so", "ld-linux-x86-64.so", "libdl.so", "libc.musl-x86_64.so"};
-
-struct libtree_options {
-    int verbosity;
-    int path;
-    // rpath substitutions
-    char *PLATFORM;
-    char *LIB;
-};
-
-static inline int host_is_little_endian() {
-    int test = 1;
-    char *bytes = (char *)&test;
-    return bytes[0] == 1;
-}
-
-static inline void utoa(char *str, unsigned int v) {
-    char *p = str;
-    do {
-        *p++ = '0' + (v % 10);
-        v /= 10;
-    } while (v > 0);
-    size_t len = p - str;
-    for (size_t i = 0; i < len / 2; i++) {
-        char tmp = str[i];
-        str[i] = str[len - i - 1];
-        str[len - i - 1] = tmp;
-    }
-    str[len] = '\0';
-}
-
-struct header_64 {
-    uint16_t e_type;
-    uint16_t e_machine;
-    uint32_t e_version;
-    uint64_t e_entry;
-    uint64_t e_phoff;
-    uint64_t e_shoff;
-    uint32_t e_flags;
-    uint16_t e_ehsize;
-    uint16_t e_phentsize;
-    uint16_t e_phnum;
-    uint16_t e_shentsize;
-    uint16_t e_shnum;
-    uint16_t e_shstrndx;
-};
-
-struct header_32 {
-    uint16_t e_type;
-    uint16_t e_machine;
-    uint32_t e_version;
-    uint32_t e_entry;
-    uint32_t e_phoff;
-    uint32_t e_shoff;
-    uint32_t e_flags;
-    uint16_t e_ehsize;
-    uint16_t e_phentsize;
-    uint16_t e_phnum;
-    uint16_t e_shentsize;
-    uint16_t e_shnum;
-    uint16_t e_shstrndx;
-};
-
-struct prog_64 {
-    uint32_t p_type;
-    uint32_t p_flags;
-    uint64_t p_offset;
-    uint64_t p_vaddr;
-    uint64_t p_paddr;
-    uint64_t p_filesz;
-    uint64_t p_memsz;
-    uint64_t p_align;
-};
-
-struct prog_32 {
-    uint32_t p_type;
-    uint32_t p_offset;
-    uint32_t p_vaddr;
-    uint32_t p_paddr;
-    uint32_t p_filesz;
-    uint32_t p_memsz;
-    uint32_t p_flags;
-    uint32_t p_align;
-};
-
-struct dyn_64 {
-    int64_t d_tag;
-    uint64_t d_val;
-};
-
-struct dyn_32 {
-    int32_t d_tag;
-    uint32_t d_val;
-};
-
 #define ET_EXEC 2
 #define ET_DYN 3
 
@@ -169,7 +70,76 @@ struct dyn_32 {
 
 #define SMALL_VEC_SIZE 16
 #define MAX_RECURSION_DEPTH 32
-#define MAX_VISITED_FILES 1024
+
+// Libraries we do not show by default -- this reduces the verbosity quite a
+// bit.
+char const *exclude_list[] = {
+    "libc.so",      "libpthread.so",      "libm.so",  "libgcc_s.so",
+    "libstdc++.so", "ld-linux-x86-64.so", "libdl.so", "libc.musl-x86_64.so"};
+
+struct header_64_t {
+    uint16_t e_type;
+    uint16_t e_machine;
+    uint32_t e_version;
+    uint64_t e_entry;
+    uint64_t e_phoff;
+    uint64_t e_shoff;
+    uint32_t e_flags;
+    uint16_t e_ehsize;
+    uint16_t e_phentsize;
+    uint16_t e_phnum;
+    uint16_t e_shentsize;
+    uint16_t e_shnum;
+    uint16_t e_shstrndx;
+};
+
+struct header_32_t {
+    uint16_t e_type;
+    uint16_t e_machine;
+    uint32_t e_version;
+    uint32_t e_entry;
+    uint32_t e_phoff;
+    uint32_t e_shoff;
+    uint32_t e_flags;
+    uint16_t e_ehsize;
+    uint16_t e_phentsize;
+    uint16_t e_phnum;
+    uint16_t e_shentsize;
+    uint16_t e_shnum;
+    uint16_t e_shstrndx;
+};
+
+struct prog_64_t {
+    uint32_t p_type;
+    uint32_t p_flags;
+    uint64_t p_offset;
+    uint64_t p_vaddr;
+    uint64_t p_paddr;
+    uint64_t p_filesz;
+    uint64_t p_memsz;
+    uint64_t p_align;
+};
+
+struct prog_32_t {
+    uint32_t p_type;
+    uint32_t p_offset;
+    uint32_t p_vaddr;
+    uint32_t p_paddr;
+    uint32_t p_filesz;
+    uint32_t p_memsz;
+    uint32_t p_flags;
+    uint32_t p_align;
+};
+
+struct dyn_64_t {
+    int64_t d_tag;
+    uint64_t d_val;
+};
+
+struct dyn_32_t {
+    int32_t d_tag;
+    uint32_t d_val;
+};
 
 typedef enum { EITHER, BITS32, BITS64 } elf_bits_t;
 
@@ -188,55 +158,87 @@ struct found_t {
     // only set when found by in the rpath NOT of the direct parent.  so, when
     // it is found in a "special" way only rpaths allow, which is worth
     // informing the user about.
-    unsigned int depth;
+    size_t depth;
 };
 
 // large buffer in which to copy rpaths, needed libraries and sonames.
-char *buf;
-size_t buf_size;
-size_t max_buf_size;
+struct string_table_t {
+    char *arr;
+    size_t n;
+    size_t capacity;
+};
 
-// rpath stack: if lib_a needs lib_b needs lib_c and all have rpaths
-// then first lib_c's rpaths are considered, then lib_b's, then lib_a's.
-// so this data structure keeps a list of offsets into the string buffer
-// where rpaths start, like [lib_a_rpath_offset, lib_b_rpath_offset,
-// lib_c_rpath_offset]...
-size_t rpath_offsets[MAX_RECURSION_DEPTH];
-size_t ld_library_path_offset;
-size_t default_paths_offset;
-size_t ld_so_conf_offset;
-
-// This is so we know we have to print a | or white space
-// in the tree
-char found_all_needed[MAX_RECURSION_DEPTH];
-
-struct visited_file {
+struct visited_file_t {
     dev_t st_dev;
     ino_t st_ino;
 };
 
-// Keep track of the files we've see
-struct visited_file visited_files[MAX_VISITED_FILES];
-size_t visited_files_count;
+struct visited_file_array_t {
+    struct visited_file_t *arr;
+    size_t n;
+    size_t capacity;
+};
 
-int color_output = 0;
+struct libtree_state_t {
+    int verbosity;
+    int path;
+    int color;
+
+    struct string_table_t string_table;
+    struct visited_file_array_t visited;
+
+    // rpath substitutions values
+    char *PLATFORM;
+    char *LIB;
+
+    // rpath stack: if lib_a needs lib_b needs lib_c and all have rpaths
+    // then first lib_c's rpaths are considered, then lib_b's, then lib_a's.
+    // so this data structure keeps a list of offsets into the string buffer
+    // where rpaths start, like [lib_a_rpath_offset, lib_b_rpath_offset,
+    // lib_c_rpath_offset]...
+    size_t rpath_offsets[MAX_RECURSION_DEPTH];
+    size_t ld_library_path_offset;
+    size_t default_paths_offset;
+    size_t ld_so_conf_offset;
+
+    // This is so we know we have to print a | or white space
+    // in the tree
+    char found_all_needed[MAX_RECURSION_DEPTH];
+};
+
+// Keep track of the files we've see
 
 /**
  * small_vec_u64 is an array that lives on the stack until it grows to the heap
  */
-struct small_vec_u64 {
+struct small_vec_u64_t {
     uint64_t buf[SMALL_VEC_SIZE];
     uint64_t *p;
     size_t n;
     size_t capacity;
 };
 
-static inline void small_vec_u64_init(struct small_vec_u64 *v) {
+static inline void utoa(char *str, size_t v) {
+    char *p = str;
+    do {
+        *p++ = '0' + (v % 10);
+        v /= 10;
+    } while (v > 0);
+    size_t len = p - str;
+    for (size_t i = 0; i < len / 2; i++) {
+        char tmp = str[i];
+        str[i] = str[len - i - 1];
+        str[len - i - 1] = tmp;
+    }
+    str[len] = '\0';
+}
+
+static inline void small_vec_u64_init(struct small_vec_u64_t *v) {
     memset(v, 0, sizeof(*v));
     v->p = v->buf;
 }
 
-static void small_vec_u64_append(struct small_vec_u64 *v, uint64_t val) {
+static void small_vec_u64_append(struct small_vec_u64_t *v, uint64_t val) {
     // The hopefully likely path
     if (v->n < SMALL_VEC_SIZE) {
         v->p[v->n++] = val;
@@ -261,7 +263,7 @@ static void small_vec_u64_append(struct small_vec_u64 *v, uint64_t val) {
     v->p[v->n++] = val;
 }
 
-static void small_vec_u64_free(struct small_vec_u64 *v) {
+static void small_vec_u64_free(struct small_vec_u64_t *v) {
     if (v->n <= SMALL_VEC_SIZE)
         return;
     free(v->p);
@@ -269,8 +271,14 @@ static void small_vec_u64_free(struct small_vec_u64 *v) {
 }
 
 /**
- * end of small_vec_u64
+ * end of small_vec_u64_t
  */
+
+static inline int host_is_little_endian() {
+    int test = 1;
+    char *bytes = (char *)&test;
+    return bytes[0] == 1;
+}
 
 static int is_ascending_order(uint64_t *v, size_t n) {
     for (size_t j = 1; j < n; ++j)
@@ -280,37 +288,36 @@ static int is_ascending_order(uint64_t *v, size_t n) {
     return 1;
 }
 
-static void maybe_grow_string_buffer(size_t n) {
+static void string_table_maybe_grow(struct string_table_t *t, size_t n) {
     // The likely case of not having to resize
-    if (buf_size + n <= max_buf_size)
+    if (t->n + n <= t->capacity)
         return;
 
     // Otherwise give twice the amount of required space.
-    max_buf_size = 2 * (buf_size + n);
-    char *res = realloc(buf, max_buf_size);
-    if (res == NULL) {
-        free(buf);
+    t->capacity = 2 * (t->n + n);
+    char *arr = realloc(t->arr, t->capacity);
+    if (arr == NULL) {
         exit(1);
     }
-    buf = res;
+    t->arr = arr;
 }
 
-static void store_string(char *str) {
+static void string_table_store(struct string_table_t *t, char const *str) {
     size_t n = strlen(str) + 1;
-    maybe_grow_string_buffer(n);
-    memcpy(buf + buf_size, str, n);
-    buf_size += n;
+    string_table_maybe_grow(t, n);
+    memcpy(t->arr + t->n, str, n);
+    t->n += n;
 }
 
-static void copy_from_file(FILE *fptr) {
+static void string_table_copy_from_file(struct string_table_t *t, FILE *fptr) {
     char c;
     // TODO: this could be a bit more efficient...
     while ((c = getc(fptr)) != '\0' && c != EOF) {
-        maybe_grow_string_buffer(1);
-        buf[buf_size++] = c;
+        string_table_maybe_grow(t, 1);
+        t->arr[t->n++] = c;
     }
-    maybe_grow_string_buffer(1);
-    buf[buf_size++] = '\0';
+    string_table_maybe_grow(t, 1);
+    t->arr[t->n++] = '\0';
 }
 
 static int is_in_exclude_list(char *soname) {
@@ -340,32 +347,34 @@ static int is_in_exclude_list(char *soname) {
     return 0;
 }
 
-static void tree_preamble(unsigned int depth) {
+static void tree_preamble(struct libtree_state_t *s, size_t depth) {
     if (depth == 0)
         return;
 
-    for (unsigned int i = 0; i < depth - 1; ++i) {
-        fputs(found_all_needed[i] ? JUST_INDENT : LIGHT_VERTICAL_WITH_INDENT,
+    for (size_t i = 0; i < depth - 1; ++i)
+        fputs(s->found_all_needed[i] ? JUST_INDENT : LIGHT_VERTICAL_WITH_INDENT,
               stdout);
-    }
 
-    fputs(found_all_needed[depth - 1]
+    fputs(s->found_all_needed[depth - 1]
               ? LIGHT_UP_AND_RIGHT LIGHT_HORIZONTAL LIGHT_HORIZONTAL " "
               : LIGHT_VERTICAL_AND_RIGHT LIGHT_HORIZONTAL LIGHT_HORIZONTAL " ",
           stdout);
 }
 
-static int recurse(char *current_file, unsigned int depth,
-                   struct libtree_options *opts, elf_bits_t bits,
+static int recurse(char *current_file, size_t depth,
+                   struct libtree_state_t *state, elf_bits_t bits,
                    struct found_t reason);
 
 static void check_search_paths(struct found_t reason, size_t offset,
                                size_t *needed_not_found,
-                               struct small_vec_u64 *needed_buf_offsets,
-                               unsigned int depth, struct libtree_options *opts,
+                               struct small_vec_u64_t *needed_buf_offsets,
+                               size_t depth, struct libtree_state_t *s,
                                elf_bits_t bits) {
     char path[4096];
     char *path_end = path + 4096;
+
+    char const *buf = s->string_table.arr;
+
     while (buf[offset] != '\0') {
         // First remove trailing colons
         while (buf[offset] == ':' && buf[offset] != '\0')
@@ -402,10 +411,10 @@ static void check_search_paths(struct found_t reason, size_t offset,
             // Otherwise append.
             memcpy(search_path_end, buf + needed_buf_offsets->p[i],
                    soname_len + 1);
-            found_all_needed[depth] = *needed_not_found <= 1;
+            s->found_all_needed[depth] = *needed_not_found <= 1;
 
             // And try to locate the lib.
-            if (recurse(path, depth + 1, opts, bits, reason) == 0) {
+            if (recurse(path, depth + 1, s, bits, reason) == 0) {
                 // Found it, so swap out the current soname to the back,
                 // and reduce the number of to be found by one.
                 size_t tmp = needed_buf_offsets->p[i];
@@ -419,18 +428,20 @@ static void check_search_paths(struct found_t reason, size_t offset,
     }
 }
 
-static int interpolate_variables(size_t src, char const *ORIGIN,
-                                 struct libtree_options *opts) {
+static int interpolate_variables(struct libtree_state_t *s, size_t src,
+                                 char const *ORIGIN) {
     // We do not write to dst if there is no variables to interpolate.
     size_t prev_src = src;
     size_t curr_src = src;
 
+    struct string_table_t *st = &s->string_table;
+
     while (1) {
         // Find the next potential variable.
-        char *dollar = strchr(&buf[curr_src], '$');
+        char *dollar = strchr(st->arr + curr_src, '$');
         if (dollar == NULL)
             break;
-        curr_src = dollar - buf;
+        curr_src = dollar - st->arr;
 
         size_t bytes_to_dollar = curr_src - prev_src;
 
@@ -439,21 +450,21 @@ static int interpolate_variables(size_t src, char const *ORIGIN,
 
         // Remember if we have to look for matching curly braces.
         int curly = 0;
-        if (buf[curr_src] == '{') {
+        if (st->arr[curr_src] == '{') {
             curly = 1;
             ++curr_src;
         }
 
         // String to interpolate.
         char const *var_val = NULL;
-        if (strncmp(&buf[curr_src], "ORIGIN", 6) == 0) {
+        if (strncmp(&st->arr[curr_src], "ORIGIN", 6) == 0) {
             var_val = ORIGIN;
             curr_src += 6;
-        } else if (strncmp(&buf[curr_src], "LIB", 3) == 0) {
-            var_val = opts->LIB;
+        } else if (strncmp(&st->arr[curr_src], "LIB", 3) == 0) {
+            var_val = s->LIB;
             curr_src += 3;
-        } else if (strncmp(&buf[curr_src], "PLATFORM", 8) == 0) {
-            var_val = opts->PLATFORM;
+        } else if (strncmp(&st->arr[curr_src], "PLATFORM", 8) == 0) {
+            var_val = s->PLATFORM;
             curr_src += 8;
         } else {
             continue;
@@ -461,7 +472,7 @@ static int interpolate_variables(size_t src, char const *ORIGIN,
 
         // Require matching {...}.
         if (curly) {
-            if (buf[curr_src] != '}') {
+            if (st->arr[curr_src] != '}') {
                 continue;
             }
             ++curr_src;
@@ -470,24 +481,25 @@ static int interpolate_variables(size_t src, char const *ORIGIN,
         size_t var_len = strlen(var_val);
 
         // Make sure we have enough space to write to.
-        maybe_grow_string_buffer(bytes_to_dollar + var_len);
+        string_table_maybe_grow(st, bytes_to_dollar + var_len);
 
         // First copy over the string until the variable.
-        memcpy(&buf[buf_size], &buf[prev_src], bytes_to_dollar);
-        buf_size += bytes_to_dollar;
+        memcpy(&st->arr[s->string_table.n], &st->arr[prev_src],
+               bytes_to_dollar);
+        s->string_table.n += bytes_to_dollar;
 
         // Then move prev_src until after the variable.
         prev_src = curr_src;
 
         // Then copy the variable value (without null).
-        memcpy(&buf[buf_size], var_val, var_len);
-        buf_size += var_len;
+        memcpy(&st->arr[s->string_table.n], var_val, var_len);
+        s->string_table.n += var_len;
     }
 
     // Did we copy anything? That implies a variable was interpolated.
     // Copy the remainder, including the \0.
     if (prev_src != src) {
-        store_string(buf + prev_src);
+        string_table_store(st, st->arr + prev_src);
         return 1;
     }
 
@@ -528,24 +540,24 @@ static void print_colon_delimited_paths(char *start, char *indent) {
     }
 }
 
-static void print_line(unsigned int depth, char *name, char *color_bold,
+static void print_line(size_t depth, char *name, char *color_bold,
                        char *color_regular, int highlight,
-                       struct found_t reason) {
-    tree_preamble(depth);
+                       struct found_t reason, struct libtree_state_t *s) {
+    tree_preamble(s, depth);
     // Color the filename different than the path name, if we have a path.
     char *slash = NULL;
-    if (color_output && highlight && (slash = strrchr(name, '/')) != NULL) {
+    if (s->color && highlight && (slash = strrchr(name, '/')) != NULL) {
         fputs(color_regular, stdout);
         fwrite(name, 1, slash + 1 - name, stdout);
         fputs(color_bold, stdout);
         fputs(slash + 1, stdout);
     } else {
-        if (color_output)
+        if (s->color)
             fputs(color_bold, stdout);
 
         fputs(name, stdout);
     }
-    if (color_output && highlight)
+    if (s->color && highlight)
         fputs(CLEAR " " BOLD_YELLOW, stdout);
     else
         putchar(' ');
@@ -579,35 +591,34 @@ static void print_line(unsigned int depth, char *name, char *color_bold,
     default:
         break;
     }
-    if (color_output)
+    if (s->color)
         fputs(CLEAR "\n", stdout);
     else
         putchar('\n');
 }
 
-static void print_error(unsigned int depth, size_t needed_not_found,
-                        struct small_vec_u64 *needed_buf_offsets,
-                        char *runpath) {
+static void print_error(size_t depth, size_t needed_not_found,
+                        struct small_vec_u64_t *needed_buf_offsets,
+                        char *runpath, struct libtree_state_t *s) {
     for (size_t i = 0; i < needed_not_found; ++i) {
-        found_all_needed[depth] = i + 1 >= needed_not_found;
-        tree_preamble(depth + 1);
-        if (color_output)
+        s->found_all_needed[depth] = i + 1 >= needed_not_found;
+        tree_preamble(s, depth + 1);
+        if (s->color)
             fputs(BOLD_RED, stdout);
-        fputs(buf + needed_buf_offsets->p[i], stdout);
-        fputs(color_output ? " not found" CLEAR "\n" : " not found\n", stdout);
+        fputs(s->string_table.arr + needed_buf_offsets->p[i], stdout);
+        fputs(s->color ? " not found" CLEAR "\n" : " not found\n", stdout);
     }
 
     // If anything was not found, we print the search paths in order they
     // are considered.
     char *box_vertical =
-        color_output
-            ? JUST_INDENT REGULAR_RED LIGHT_QUADRUPLE_DASH_VERTICAL CLEAR
-            : JUST_INDENT LIGHT_QUADRUPLE_DASH_VERTICAL;
+        s->color ? JUST_INDENT REGULAR_RED LIGHT_QUADRUPLE_DASH_VERTICAL CLEAR
+                 : JUST_INDENT LIGHT_QUADRUPLE_DASH_VERTICAL;
     char *indent = malloc(sizeof(LIGHT_VERTICAL_WITH_INDENT) * depth +
                           strlen(box_vertical) + 1);
     char *p = indent;
     for (int i = 0; i < depth; ++i) {
-        if (found_all_needed[i]) {
+        if (s->found_all_needed[i]) {
             int len = sizeof(JUST_INDENT) - 1;
             memcpy(p, JUST_INDENT, len);
             p += len;
@@ -621,89 +632,115 @@ static void print_error(unsigned int depth, size_t needed_not_found,
     strcpy(p, box_vertical);
 
     fputs(indent, stdout);
-    if (color_output)
+    if (s->color)
         fputs(BRIGHT_BLACK, stdout);
     fputs(" Paths considered in this order:\n", stdout);
-    if (color_output)
+    if (s->color)
         fputs(CLEAR, stdout);
 
     // Consider rpaths only when runpath is empty
     fputs(indent, stdout);
     if (runpath != NULL) {
-        if (color_output)
+        if (s->color)
             fputs(BRIGHT_BLACK, stdout);
         fputs(" 1. rpath is skipped because runpath was set\n", stdout);
-        if (color_output)
+        if (s->color)
             fputs(CLEAR, stdout);
     } else {
-        fputs(color_output ? BRIGHT_BLACK " 1. rpath:" CLEAR "\n"
-                           : " 1. rpath:\n",
+        fputs(s->color ? BRIGHT_BLACK " 1. rpath:" CLEAR "\n" : " 1. rpath:\n",
               stdout);
         for (int j = depth; j >= 0; --j) {
-            if (rpath_offsets[j] != SIZE_MAX) {
+            if (s->rpath_offsets[j] != SIZE_MAX) {
                 char num[8];
                 utoa(num, j + 1);
                 fputs(indent, stdout);
-                if (color_output)
+                if (s->color)
                     fputs(BRIGHT_BLACK, stdout);
                 fputs("    depth ", stdout);
                 fputs(num, stdout);
-                if (color_output)
+                if (s->color)
                     fputs(CLEAR, stdout);
-                print_colon_delimited_paths(buf + rpath_offsets[j], indent);
+                putchar('\n');
+                print_colon_delimited_paths(
+                    s->string_table.arr + s->rpath_offsets[j], indent);
             }
         }
     }
 
     fputs(indent, stdout);
-    if (ld_library_path_offset == SIZE_MAX) {
-        fputs(color_output ? BRIGHT_BLACK
-                  " 2. LD_LIBRARY_PATH was not set" CLEAR "\n"
-                           : " 2. LD_LIBRARY_PATH was not set\n",
+    if (s->ld_library_path_offset == SIZE_MAX) {
+        fputs(s->color ? BRIGHT_BLACK " 2. LD_LIBRARY_PATH was not set" CLEAR
+                                      "\n"
+                       : " 2. LD_LIBRARY_PATH was not set\n",
               stdout);
     } else {
-        fputs(color_output ? BRIGHT_BLACK " 2. LD_LIBRARY_PATH:" CLEAR "\n"
-                           : " 2. LD_LIBRARY_PATH:\n",
+        fputs(s->color ? BRIGHT_BLACK " 2. LD_LIBRARY_PATH:" CLEAR "\n"
+                       : " 2. LD_LIBRARY_PATH:\n",
               stdout);
-        print_colon_delimited_paths(buf + ld_library_path_offset, indent);
+        print_colon_delimited_paths(
+            s->string_table.arr + s->ld_library_path_offset, indent);
     }
 
     fputs(indent, stdout);
     if (runpath == NULL) {
-        fputs(color_output ? BRIGHT_BLACK " 3. runpath was not set" CLEAR "\n"
-                           : " 3. runpath was not set\n",
+        fputs(s->color ? BRIGHT_BLACK " 3. runpath was not set" CLEAR "\n"
+                       : " 3. runpath was not set\n",
               stdout);
     } else {
-        fputs(color_output ? BRIGHT_BLACK " 3. runpath:" CLEAR "\n"
-                           : " 3. runpath:\n",
+        fputs(s->color ? BRIGHT_BLACK " 3. runpath:" CLEAR "\n"
+                       : " 3. runpath:\n",
               stdout);
         print_colon_delimited_paths(runpath, indent);
     }
 
     fputs(indent, stdout);
-    fputs(color_output ? BRIGHT_BLACK " 4. ld.so.conf:" CLEAR "\n"
-                       : " 4. ld.so.conf:\n",
+    fputs(s->color ? BRIGHT_BLACK " 4. ld.so.conf:" CLEAR "\n"
+                   : " 4. ld.so.conf:\n",
           stdout);
-    print_colon_delimited_paths(buf + ld_so_conf_offset, indent);
+    print_colon_delimited_paths(s->string_table.arr + s->ld_so_conf_offset,
+                                indent);
 
     fputs(indent, stdout);
-    fputs(color_output ? BRIGHT_BLACK " 5. Standard paths:" CLEAR "\n"
-                       : " 5. Standard paths:\n",
+    fputs(s->color ? BRIGHT_BLACK " 5. Standard paths:" CLEAR "\n"
+                   : " 5. Standard paths:\n",
           stdout);
-    print_colon_delimited_paths(buf + default_paths_offset, indent);
+    print_colon_delimited_paths(s->string_table.arr + s->default_paths_offset,
+                                indent);
 
     free(indent);
 }
 
-static int recurse(char *current_file, unsigned int depth,
-                   struct libtree_options *opts, elf_bits_t parent_bits,
-                   struct found_t reason) {
+static int visited_files_contains(struct visited_file_array_t *files,
+                                  struct stat *needle) {
+    for (size_t i = 0; i < files->n; ++i) {
+        struct visited_file_t *f = &files->arr[i];
+        if (f->st_dev == needle->st_dev && f->st_ino == needle->st_ino)
+            return 1;
+    }
+    return 0;
+}
+
+static void visited_files_append(struct visited_file_array_t *files,
+                                 struct stat *new) {
+    if (files->n == files->capacity) {
+        files->capacity *= 2;
+        files->arr = realloc(files->arr, files->capacity);
+        if (files->arr == NULL)
+            exit(1);
+    }
+    files->arr[files->n].st_dev = new->st_dev;
+    files->arr[files->n].st_ino = new->st_ino;
+    ++files->n;
+}
+
+static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
+                   elf_bits_t parent_bits, struct found_t reason) {
     FILE *fptr = fopen(current_file, "rb");
     if (fptr == NULL)
         return 1;
 
     // When we're done recursing, we should give back the memory we've claimed.
-    size_t old_buf_size = buf_size;
+    size_t old_buf_size = s->string_table.n;
 
     // Parse the header
     char e_ident[16];
@@ -748,13 +785,13 @@ static int recurse(char *current_file, unsigned int depth,
 
     // And get the type
     union {
-        struct header_64 h64;
-        struct header_32 h32;
+        struct header_64_t h64;
+        struct header_32_t h32;
     } header;
 
     // Read the (rest of the) elf header
     if (curr_bits == BITS64) {
-        if (fread(&header.h64, sizeof(struct header_64), 1, fptr) != 1) {
+        if (fread(&header.h64, sizeof(struct header_64_t), 1, fptr) != 1) {
             fclose(fptr);
             return ERR_INVALID_HEADER;
         }
@@ -767,7 +804,7 @@ static int recurse(char *current_file, unsigned int depth,
             return ERR_INVALID_PHOFF;
         }
     } else {
-        if (fread(&header.h32, sizeof(struct header_32), 1, fptr) != 1) {
+        if (fread(&header.h32, sizeof(struct header_32_t), 1, fptr) != 1) {
             fclose(fptr);
             return ERR_INVALID_HEADER;
         }
@@ -783,14 +820,14 @@ static int recurse(char *current_file, unsigned int depth,
 
     // Make sure it's an executable or library
     union {
-        struct prog_64 p64;
-        struct prog_32 p32;
+        struct prog_64_t p64;
+        struct prog_32_t p32;
     } prog;
 
     // map vaddr to file offset (we don't mmap the file, but directly seek in
     // the file which means that we have to translate vaddr to file offset)
-    struct small_vec_u64 pt_load_offset;
-    struct small_vec_u64 pt_load_vaddr;
+    struct small_vec_u64_t pt_load_offset;
+    struct small_vec_u64_t pt_load_vaddr;
 
     small_vec_u64_init(&pt_load_offset);
     small_vec_u64_init(&pt_load_vaddr);
@@ -799,7 +836,7 @@ static int recurse(char *current_file, unsigned int depth,
     uint64_t p_offset = MAX_OFFSET_T;
     if (curr_bits == BITS64) {
         for (uint64_t i = 0; i < header.h64.e_phnum; ++i) {
-            if (fread(&prog.p64, sizeof(struct prog_64), 1, fptr) != 1) {
+            if (fread(&prog.p64, sizeof(struct prog_64_t), 1, fptr) != 1) {
                 fclose(fptr);
                 small_vec_u64_free(&pt_load_offset);
                 small_vec_u64_free(&pt_load_vaddr);
@@ -815,7 +852,7 @@ static int recurse(char *current_file, unsigned int depth,
         }
     } else {
         for (uint32_t i = 0; i < header.h32.e_phnum; ++i) {
-            if (fread(&prog.p32, sizeof(struct prog_32), 1, fptr) != 1) {
+            if (fread(&prog.p32, sizeof(struct prog_32_t), 1, fptr) != 1) {
                 fclose(fptr);
                 small_vec_u64_free(&pt_load_offset);
                 small_vec_u64_free(&pt_load_vaddr);
@@ -840,24 +877,14 @@ static int recurse(char *current_file, unsigned int depth,
         return ERR_CANT_STAT;
     }
 
-    int seen_before = 0;
-    for (size_t i = 0; i < visited_files_count; ++i) {
-        if (visited_files[i].st_dev == finfo.st_dev &&
-            visited_files[i].st_ino == finfo.st_ino) {
-            seen_before = 1;
-            break;
-        }
-    }
+    int seen_before = visited_files_contains(&s->visited, &finfo);
 
-    if (!seen_before && visited_files_count < MAX_VISITED_FILES) {
-        visited_files[visited_files_count].st_dev = finfo.st_dev;
-        visited_files[visited_files_count].st_ino = finfo.st_ino;
-        ++visited_files_count;
-    }
+    if (!seen_before)
+        visited_files_append(&s->visited, &finfo);
 
     // No dynamic section?
     if (p_offset == MAX_OFFSET_T) {
-        print_line(depth, current_file, BOLD_CYAN, REGULAR_CYAN, 1, reason);
+        print_line(depth, current_file, BOLD_CYAN, REGULAR_CYAN, 1, reason, s);
         fclose(fptr);
         small_vec_u64_free(&pt_load_offset);
         small_vec_u64_free(&pt_load_vaddr);
@@ -888,7 +915,7 @@ static int recurse(char *current_file, unsigned int depth,
     uint64_t soname = MAX_OFFSET_T;
 
     // Offsets in strtab
-    struct small_vec_u64 needed;
+    struct small_vec_u64_t needed;
     small_vec_u64_init(&needed);
 
     for (int cont = 1; cont;) {
@@ -896,8 +923,8 @@ static int recurse(char *current_file, unsigned int depth,
         uint64_t d_val;
 
         if (curr_bits == BITS64) {
-            struct dyn_64 dyn;
-            if (fread(&dyn, sizeof(struct dyn_64), 1, fptr) != 1) {
+            struct dyn_64_t dyn;
+            if (fread(&dyn, sizeof(struct dyn_64_t), 1, fptr) != 1) {
                 fclose(fptr);
                 small_vec_u64_free(&pt_load_offset);
                 small_vec_u64_free(&pt_load_vaddr);
@@ -908,8 +935,8 @@ static int recurse(char *current_file, unsigned int depth,
             d_val = dyn.d_val;
 
         } else {
-            struct dyn_32 dyn;
-            if (fread(&dyn, sizeof(struct dyn_32), 1, fptr) != 1) {
+            struct dyn_32_t dyn;
+            if (fread(&dyn, sizeof(struct dyn_32_t), 1, fptr) != 1) {
                 fclose(fptr);
                 small_vec_u64_free(&pt_load_offset);
                 small_vec_u64_free(&pt_load_vaddr);
@@ -978,37 +1005,38 @@ static int recurse(char *current_file, unsigned int depth,
     // own string buffer.
 
     // Copy the current soname
-    size_t soname_buf_offset = buf_size;
+    size_t soname_buf_offset = s->string_table.n;
     if (soname != MAX_OFFSET_T) {
         if (fseek(fptr, strtab_offset + soname, SEEK_SET) != 0) {
-            buf_size = old_buf_size;
+            s->string_table.n = old_buf_size;
             fclose(fptr);
             small_vec_u64_free(&needed);
             return ERR_INVALID_SONAME;
         }
-        copy_from_file(fptr);
+        string_table_copy_from_file(&s->string_table, fptr);
     }
 
     int in_exclude_list =
-        soname != MAX_OFFSET_T && is_in_exclude_list(buf + soname_buf_offset);
+        soname != MAX_OFFSET_T &&
+        is_in_exclude_list(s->string_table.arr + soname_buf_offset);
 
     // No need to recurse deeper when we aren't in very verbose mode.
     int should_recurse =
         depth < MAX_RECURSION_DEPTH &&
         ((!seen_before && !in_exclude_list) ||
-         (!seen_before && in_exclude_list && opts->verbosity >= 2) ||
-         opts->verbosity == 3);
+         (!seen_before && in_exclude_list && s->verbosity >= 2) ||
+         s->verbosity == 3);
 
     // Just print the library and return
     if (!should_recurse) {
-        char *print_name = soname != MAX_OFFSET_T && !opts->path
-                               ? buf + soname_buf_offset
+        char *print_name = soname != MAX_OFFSET_T && !s->path
+                               ? s->string_table.arr + soname_buf_offset
                                : current_file;
         char *bold_color = in_exclude_list ? REGULAR_MAGENTA : REGULAR_BLUE;
         char *regular_color = in_exclude_list ? REGULAR_MAGENTA : REGULAR_BLUE;
-        print_line(depth, print_name, bold_color, regular_color, 0, reason);
+        print_line(depth, print_name, bold_color, regular_color, 0, reason, s);
 
-        buf_size = old_buf_size;
+        s->string_table.n = old_buf_size;
         fclose(fptr);
         small_vec_u64_free(&needed);
         return 0;
@@ -1029,63 +1057,63 @@ static int recurse(char *current_file, unsigned int depth,
 
     // Copy DT_PRATH
     if (rpath == MAX_OFFSET_T) {
-        rpath_offsets[depth] = SIZE_MAX;
+        s->rpath_offsets[depth] = SIZE_MAX;
     } else {
-        rpath_offsets[depth] = buf_size;
+        s->rpath_offsets[depth] = s->string_table.n;
         if (fseek(fptr, strtab_offset + rpath, SEEK_SET) != 0) {
-            buf_size = old_buf_size;
+            s->string_table.n = old_buf_size;
             fclose(fptr);
             small_vec_u64_free(&needed);
             return ERR_INVALID_RPATH;
         }
 
-        copy_from_file(fptr);
+        string_table_copy_from_file(&s->string_table, fptr);
 
         // We store the interpolated string right after the literal copy.
-        size_t curr_buf_size = buf_size;
-        if (interpolate_variables(rpath_offsets[depth], origin, opts))
-            rpath_offsets[depth] = curr_buf_size;
+        size_t curr_buf_size = s->string_table.n;
+        if (interpolate_variables(s, s->rpath_offsets[depth], origin))
+            s->rpath_offsets[depth] = curr_buf_size;
     }
 
     // Copy DT_RUNPATH
-    size_t runpath_buf_offset = buf_size;
+    size_t runpath_buf_offset = s->string_table.n;
     if (runpath != MAX_OFFSET_T) {
         if (fseek(fptr, strtab_offset + runpath, SEEK_SET) != 0) {
-            buf_size = old_buf_size;
+            s->string_table.n = old_buf_size;
             fclose(fptr);
             small_vec_u64_free(&needed);
             return ERR_INVALID_RUNPATH;
         }
 
-        copy_from_file(fptr);
+        string_table_copy_from_file(&s->string_table, fptr);
 
         // We store the interpolated string right after the literal copy.
-        size_t curr_buf_size = buf_size;
-        if (interpolate_variables(runpath_buf_offset, origin, opts))
+        size_t curr_buf_size = s->string_table.n;
+        if (interpolate_variables(s, runpath_buf_offset, origin))
             runpath_buf_offset = curr_buf_size;
     }
 
     // Copy needed libraries.
-    struct small_vec_u64 needed_buf_offsets;
+    struct small_vec_u64_t needed_buf_offsets;
     small_vec_u64_init(&needed_buf_offsets);
 
     for (size_t i = 0; i < needed.n; ++i) {
-        small_vec_u64_append(&needed_buf_offsets, buf_size);
+        small_vec_u64_append(&needed_buf_offsets, s->string_table.n);
         if (fseek(fptr, strtab_offset + needed.p[i], SEEK_SET) != 0) {
-            buf_size = old_buf_size;
+            s->string_table.n = old_buf_size;
             fclose(fptr);
             small_vec_u64_free(&needed_buf_offsets);
             small_vec_u64_free(&needed);
             return ERR_INVALID_NEEDED;
         }
-        copy_from_file(fptr);
+        string_table_copy_from_file(&s->string_table, fptr);
     }
 
     fclose(fptr);
 
-    char *print_name = soname == MAX_OFFSET_T || opts->path
+    char *print_name = soname == MAX_OFFSET_T || s->path
                            ? current_file
-                           : (buf + soname_buf_offset);
+                           : (s->string_table.arr + soname_buf_offset);
 
     char *bold_color = in_exclude_list ? REGULAR_MAGENTA
                                        : seen_before ? REGULAR_BLUE : BOLD_CYAN;
@@ -1094,17 +1122,19 @@ static int recurse(char *current_file, unsigned int depth,
                               : seen_before ? REGULAR_BLUE : REGULAR_CYAN;
 
     int highlight = !seen_before && !in_exclude_list;
-    print_line(depth, print_name, bold_color, regular_color, highlight, reason);
+    print_line(depth, print_name, bold_color, regular_color, highlight, reason,
+               s);
 
     // Finally start searching.
 
     size_t needed_not_found = needed_buf_offsets.n;
 
     // Skip common libraries if not verbose
-    if (needed_not_found && opts->verbosity == 0) {
+    if (needed_not_found && s->verbosity == 0) {
         for (size_t i = 0; i < needed_not_found;) {
             // If in exclude list, swap to the back.
-            if (is_in_exclude_list(buf + needed_buf_offsets.p[i])) {
+            if (is_in_exclude_list(s->string_table.arr +
+                                   needed_buf_offsets.p[i])) {
                 size_t tmp = needed_buf_offsets.p[i];
                 needed_buf_offsets.p[i] =
                     needed_buf_offsets.p[needed_not_found - 1];
@@ -1118,28 +1148,28 @@ static int recurse(char *current_file, unsigned int depth,
 
     // First go over absolute paths in needed libs.
     for (size_t i = 0; i < needed_not_found;) {
-        char *name = buf + needed_buf_offsets.p[i];
+        char *name = s->string_table.arr + needed_buf_offsets.p[i];
         if (strchr(name, '/') != NULL) {
             // If it is not an absolute path, we bail, cause it then starts to
             // depend on the current working directory, which is rather
             // nonsensical. This is allowed by glibc though.
-            found_all_needed[depth] = needed_not_found <= 1;
+            s->found_all_needed[depth] = needed_not_found <= 1;
             if (name[0] != '/') {
-                tree_preamble(depth + 1);
-                if (color_output)
+                tree_preamble(s, depth + 1);
+                if (s->color)
                     fputs(BOLD_RED, stdout);
                 fputs(name, stdout);
                 fputs(" is not absolute", stdout);
-                fputs(color_output ? CLEAR "\n" : "\n", stdout);
-            } else if (recurse(name, depth + 1, opts, curr_bits,
+                fputs(s->color ? CLEAR "\n" : "\n", stdout);
+            } else if (recurse(name, depth + 1, s, curr_bits,
                                (struct found_t){.how = DIRECT, .depth = 0}) !=
                        0) {
-                tree_preamble(depth + 1);
-                if (color_output)
+                tree_preamble(s, depth + 1);
+                if (s->color)
                     fputs(BOLD_RED, stdout);
                 fputs(name, stdout);
                 fputs(" not found", stdout);
-                fputs(color_output ? CLEAR "\n" : "\n", stdout);
+                fputs(s->color ? CLEAR "\n" : "\n", stdout);
             }
 
             // Even if not officially found, we mark it as found, cause we
@@ -1158,48 +1188,51 @@ static int recurse(char *current_file, unsigned int depth,
         // We have a stack of rpaths, try them all, starting with one set at
         // this lib, then the parents.
         for (int j = depth; j >= 0 && needed_not_found; --j) {
-            if (rpath_offsets[j] == SIZE_MAX)
+            if (s->rpath_offsets[j] == SIZE_MAX)
                 continue;
 
             check_search_paths((struct found_t){.how = RPATH, .depth = j},
-                               rpath_offsets[j], &needed_not_found,
-                               &needed_buf_offsets, depth, opts, curr_bits);
+                               s->rpath_offsets[j], &needed_not_found,
+                               &needed_buf_offsets, depth, s, curr_bits);
         }
     }
 
     // Then try LD_LIBRARY_PATH, if we have it.
-    if (needed_not_found && ld_library_path_offset != SIZE_MAX) {
+    if (needed_not_found && s->ld_library_path_offset != SIZE_MAX) {
         check_search_paths((struct found_t){.how = LD_LIBRARY_PATH, .depth = 0},
-                           ld_library_path_offset, &needed_not_found,
-                           &needed_buf_offsets, depth, opts, curr_bits);
+                           s->ld_library_path_offset, &needed_not_found,
+                           &needed_buf_offsets, depth, s, curr_bits);
     }
 
     // Then consider runpaths
     if (needed_not_found && runpath != MAX_OFFSET_T) {
         check_search_paths((struct found_t){.how = RUNPATH, .depth = 0},
                            runpath_buf_offset, &needed_not_found,
-                           &needed_buf_offsets, depth, opts, curr_bits);
+                           &needed_buf_offsets, depth, s, curr_bits);
     }
 
     // Check ld.so.conf paths
     if (needed_not_found) {
         check_search_paths((struct found_t){.how = LD_SO_CONF, .depth = 0},
-                           ld_so_conf_offset, &needed_not_found,
-                           &needed_buf_offsets, depth, opts, curr_bits);
+                           s->ld_so_conf_offset, &needed_not_found,
+                           &needed_buf_offsets, depth, s, curr_bits);
     }
 
     // Then consider standard paths
     if (needed_not_found) {
         check_search_paths((struct found_t){.how = DEFAULT, .depth = 0},
-                           default_paths_offset, &needed_not_found,
-                           &needed_buf_offsets, depth, opts, curr_bits);
+                           s->default_paths_offset, &needed_not_found,
+                           &needed_buf_offsets, depth, s, curr_bits);
     }
 
     // Finally summarize those that could not be found.
     if (needed_not_found) {
         print_error(depth, needed_not_found, &needed_buf_offsets,
-                    runpath == MAX_OFFSET_T ? NULL : buf + runpath_buf_offset);
-        buf_size = old_buf_size;
+                    runpath == MAX_OFFSET_T
+                        ? NULL
+                        : s->string_table.arr + runpath_buf_offset,
+                    s);
+        s->string_table.n = old_buf_size;
         small_vec_u64_free(&needed_buf_offsets);
         small_vec_u64_free(&needed);
         // return ERR_NOT_FOUND;
@@ -1207,15 +1240,15 @@ static int recurse(char *current_file, unsigned int depth,
     }
 
     // Free memory in our string table
-    buf_size = old_buf_size;
+    s->string_table.n = old_buf_size;
     small_vec_u64_free(&needed_buf_offsets);
     small_vec_u64_free(&needed);
     return 0;
 }
 
-static int parse_ld_config_file(char *path);
+static int parse_ld_config_file(struct string_table_t *st, char *path);
 
-static int ld_conf_globbing(char *pattern) {
+static int ld_conf_globbing(struct string_table_t *st, char *pattern) {
     glob_t result;
     memset(&result, 0, sizeof(result));
     int status = glob(pattern, 0, NULL, &result);
@@ -1234,13 +1267,13 @@ static int ld_conf_globbing(char *pattern) {
     // Otherwise parse the files we've found!
     int code = 0;
     for (size_t i = 0; i < result.gl_pathc; ++i)
-        code |= parse_ld_config_file(result.gl_pathv[i]);
+        code |= parse_ld_config_file(st, result.gl_pathv[i]);
 
     globfree(&result);
     return code;
 }
 
-static int parse_ld_config_file(char *path) {
+static int parse_ld_config_file(struct string_table_t *st, char *path) {
     FILE *fptr = fopen(path, "r");
 
     if (fptr == NULL)
@@ -1299,11 +1332,11 @@ static int parse_ld_config_file(char *path) {
             if (*begin != '/')
                 continue;
 
-            ld_conf_globbing(begin);
+            ld_conf_globbing(st, begin);
         } else {
             // Copy over and replace trailing \0 with :.
-            store_string(begin);
-            buf[buf_size - 1] = ':';
+            string_table_store(st, begin);
+            st->arr[st->n - 1] = ':';
         }
     }
 
@@ -1312,83 +1345,90 @@ static int parse_ld_config_file(char *path) {
     return 0;
 }
 
-static void parse_ld_so_conf() {
-    ld_so_conf_offset = buf_size;
-    parse_ld_config_file("/etc/ld.so.conf");
+static void parse_ld_so_conf(struct libtree_state_t *s) {
+    struct string_table_t *st = &s->string_table;
+    s->ld_so_conf_offset = st->n;
+    parse_ld_config_file(st, "/etc/ld.so.conf");
 
     // Replace the last semicolon with a '\0'
     // if we have a nonzero number of paths.
-    if (buf_size > ld_so_conf_offset) {
-        buf[buf_size - 1] = '\0';
+    if (st->n > s->ld_so_conf_offset) {
+        st->arr[st->n - 1] = '\0';
     } else {
-        store_string("");
+        string_table_store(st, "");
     }
 }
 
-static void parse_ld_library_path() {
+static void parse_ld_library_path(struct libtree_state_t *s) {
     char *LD_LIBRARY_PATH = "LD_LIBRARY_PATH";
-    ld_library_path_offset = SIZE_MAX;
+    s->ld_library_path_offset = SIZE_MAX;
     char *val = getenv(LD_LIBRARY_PATH);
 
     // not set, so nothing to do.
     if (val == NULL)
         return;
 
-    ld_library_path_offset = buf_size;
+    s->ld_library_path_offset = s->string_table.n;
 
     // otherwise, we just copy it over and replace ; with :
-    store_string(val);
+    string_table_store(&s->string_table, val);
 
     // replace ; with :
-    char *search = buf + ld_library_path_offset;
+    char *search = s->string_table.arr + s->ld_library_path_offset;
     while ((search = strchr(search, ';')) != NULL)
         *search++ = ':';
 }
 
-static void set_default_paths() {
-    default_paths_offset = buf_size;
-    store_string("/lib:/lib64:/usr/lib:/usr/lib64");
+static void set_default_paths(struct libtree_state_t *s) {
+    s->default_paths_offset = s->string_table.n;
+    string_table_store(&s->string_table, "/lib:/lib64:/usr/lib:/usr/lib64");
 }
 
-static int print_tree(int pathc, char **pathv, struct libtree_options *opts) {
-    // This is where we store rpaths, sonames, needed, search paths.
-    max_buf_size = 1024;
-    buf_size = 0;
-    buf = malloc(max_buf_size);
+static void libtree_state_init(struct libtree_state_t *s) {
+    s->string_table.n = 0;
+    s->string_table.capacity = 1024;
+    s->string_table.arr = malloc(s->string_table.capacity);
+    s->visited.n = 0;
+    s->visited.capacity = 256;
+    s->visited.arr = malloc(s->visited.capacity);
+}
 
-    visited_files_count = 0;
+static void libtree_state_free(struct libtree_state_t *s) {
+    free(s->string_table.arr);
+    free(s->visited.arr);
+}
 
+static int print_tree(int pathc, char **pathv, struct libtree_state_t *s) {
     // First collect standard paths
-    parse_ld_so_conf();
-    parse_ld_library_path();
-    // Make sure the last colon is replaced with a null.
+    libtree_state_init(s);
 
-    set_default_paths();
+    parse_ld_so_conf(s);
+    parse_ld_library_path(s);
+    set_default_paths(s);
 
-    int last_error = 0;
+    int libtree_last_err = 0;
 
     for (int i = 0; i < pathc; ++i) {
-        int result = recurse(pathv[i], 0, opts, EITHER,
+        int result = recurse(pathv[i], 0, s, EITHER,
                              (struct found_t){.how = INPUT, .depth = 0});
         if (result != 0)
-            last_error = result;
+            libtree_last_err = result;
     }
 
-    free(buf);
-
-    return last_error;
+    libtree_state_free(s);
+    return libtree_last_err;
 }
 
 int main(int argc, char **argv) {
     // Enable or disable colors (no-color.com)
-    color_output = getenv("NO_COLOR") == NULL && isatty(STDOUT_FILENO);
+    struct libtree_state_t s;
+    s.color = getenv("NO_COLOR") == NULL && isatty(STDOUT_FILENO);
+    s.verbosity = 0;
+    s.path = 0;
 
     // We want to end up with an array of file names
     // in argv[1] up to argv[positional-1].
     int positional = 1;
-
-    // Default values.
-    struct libtree_options opts = {.verbosity = 0, .path = 0};
 
     struct utsname uname_val;
     if (uname(&uname_val) != 0)
@@ -1397,10 +1437,10 @@ int main(int argc, char **argv) {
     // Technically this should be AT_PLATFORM, but
     // (a) the feature is rarely used
     // (b) it's almost always the same
-    opts.PLATFORM = uname_val.machine;
+    s.PLATFORM = uname_val.machine;
 
     // Unclear how to detect this at runtime
-    opts.LIB = "lib";
+    s.LIB = "lib";
 
     int opt_help = 0;
     int opt_version = 0;
@@ -1433,9 +1473,9 @@ int main(int argc, char **argv) {
             if (strcmp(arg, "version") == 0) {
                 opt_version = 1;
             } else if (strcmp(arg, "path") == 0) {
-                opts.path = 1;
+                s.path = 1;
             } else if (strcmp(arg, "verbose") == 0) {
-                ++opts.verbosity;
+                ++s.verbosity;
             } else if (strcmp(arg, "help") == 0) {
                 opt_help = 1;
             } else {
@@ -1455,10 +1495,10 @@ int main(int argc, char **argv) {
                 opt_help = 1;
                 break;
             case 'p':
-                opts.path = 1;
+                s.path = 1;
                 break;
             case 'v':
-                ++opts.verbosity;
+                ++s.verbosity;
                 break;
             default:
                 fputs("Unrecognized flag `-", stderr);
@@ -1521,5 +1561,5 @@ int main(int argc, char **argv) {
         return 0;
     }
 
-    return print_tree(positional, argv, &opts);
+    return print_tree(positional, argv, &s);
 }
