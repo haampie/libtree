@@ -368,8 +368,8 @@ static void check_search_paths(struct found_t reason, size_t offset,
     char *path_end = path + 4096;
     while (buf[offset] != '\0') {
         // First remove trailing colons
-        for (; buf[offset] == ':' && buf[offset] != '\0'; ++offset) {
-        }
+        while (buf[offset] == ':' && buf[offset] != '\0')
+            ++offset;
 
         // Check if it was only colons
         if (buf[offset] == '\0')
@@ -487,10 +487,7 @@ static int interpolate_variables(size_t src, char const *ORIGIN,
     // Did we copy anything? That implies a variable was interpolated.
     // Copy the remainder, including the \0.
     if (prev_src != src) {
-        size_t remaining = strlen(&buf[prev_src]) + 1;
-        maybe_grow_string_buffer(remaining);
-        memcpy(&buf[buf_size], &buf[prev_src], remaining);
-        buf_size += remaining;
+        store_string(buf + prev_src);
         return 1;
     }
 
