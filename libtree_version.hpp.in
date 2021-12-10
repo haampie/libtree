@@ -1,1 +1,0 @@
-static constexpr const char* s_libtree_version = "@libtree_VERSION@";

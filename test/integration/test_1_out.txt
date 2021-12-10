@@ -1,6 +1,0 @@
-main
-└── libliba.so [rpath]
-    └── liblibb.so [rpath]
-        └── liblibc.so [runpath]
-            └── liblibd.so [rpath]
-
