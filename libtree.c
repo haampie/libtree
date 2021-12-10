@@ -1516,7 +1516,7 @@ int main(int argc, char **argv) {
     if (opt_help || (!opt_version && positional == 0)) {
         // clang-format off
         fputs("Show the dynamic dependency tree of ELF files\n"
-              "Usage: libtree [OPTION]... [FILE]...\n"
+              "Usage: libtree [OPTION]... [--] FILE [FILES]...\n"
               "\n"
               "  -h, --help     Print help info\n"
               "      --version  Print version info\n"
