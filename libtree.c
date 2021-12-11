@@ -382,21 +382,22 @@ static void check_search_paths(struct found_t reason, size_t offset,
     char path[4096];
     char *path_end = path + 4096;
 
-    char const *buf = s->string_table.arr;
+    struct string_table_t const *st = &s->string_table;
 
-    while (buf[offset] != '\0') {
+    while (st->arr[offset] != '\0') {
         // First remove trailing colons
-        while (buf[offset] == ':' && buf[offset] != '\0')
+        while (st->arr[offset] == ':' && st->arr[offset] != '\0')
             ++offset;
 
         // Check if it was only colons
-        if (buf[offset] == '\0')
+        if (st->arr[offset] == '\0')
             return;
 
         // Copy the search path until the first \0 or :
         char *dest = path;
-        while (buf[offset] != '\0' && buf[offset] != ':' && dest != path_end)
-            *dest++ = buf[offset++];
+        while (st->arr[offset] != '\0' && st->arr[offset] != ':' &&
+               dest != path_end)
+            *dest++ = st->arr[offset++];
 
         // Path too long... Can't handle.
         if (dest + 1 >= path_end)
@@ -411,14 +412,14 @@ static void check_search_paths(struct found_t reason, size_t offset,
 
         // Try to open it -- if we've found anything, swap it with the back.
         for (size_t i = 0; i < *needed_not_found;) {
-            size_t soname_len = strlen(buf + needed_buf_offsets->p[i]);
+            size_t soname_len = strlen(st->arr + needed_buf_offsets->p[i]);
 
             // Path too long, can't handle.
             if (search_path_end + soname_len + 1 >= path_end)
                 continue;
 
             // Otherwise append.
-            memcpy(search_path_end, buf + needed_buf_offsets->p[i],
+            memcpy(search_path_end, st->arr + needed_buf_offsets->p[i],
                    soname_len + 1);
             s->found_all_needed[depth] = *needed_not_found <= 1;
 
