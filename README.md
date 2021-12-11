@@ -25,3 +25,14 @@ curl -Lfs https://raw.githubusercontent.com/haampie/libtree-in-c/master/libtree.
 </details>
 
 
+## Verbose output
+
+By default, certain standard dependencies are not shown. For more verbose output use
+
+-  `libtree -v`             Show libraries skipped by default
+-  `libtree -vv`            Show dependencies of libraries skipped by default
+-  `libtree -vvv`           Show dependencies of already encountered libraries
+
+Use the `--path` or `-p` flags to show paths rather than sonames:
+
+- `libtree -p $(which tar)`
