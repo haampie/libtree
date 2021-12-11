@@ -1378,7 +1378,12 @@ static int parse_ld_config_file(struct string_table_t *st, char *path) {
 static void parse_ld_so_conf(struct libtree_state_t *s) {
     struct string_table_t *st = &s->string_table;
     s->ld_so_conf_offset = st->n;
+
+    // Linux / glibc
     parse_ld_config_file(st, "/etc/ld.so.conf");
+
+    // FreeBSD
+    parse_ld_config_file(st, "/etc/ld-elf.so.conf");
 
     // Replace the last semicolon with a '\0'
     // if we have a nonzero number of paths.
