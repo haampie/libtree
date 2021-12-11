@@ -5,6 +5,8 @@
 #include <termcolor/termcolor.hpp>
 
 #include <variant>
+#include <iterator>
+
 
 bool is_lib(fs::path const &p) {
     auto filename = p.filename().string();
