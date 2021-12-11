@@ -2,7 +2,8 @@ ifeq (exists, $(shell [ -e $(CURDIR)/Make.user ] && echo exists ))
 include $(CURDIR)/Make.user
 endif
 
-LIBTREE_CFLAGS := -Wall -O2 -std=c99 -D_FILE_OFFSET_BITS=64 $(CFLAGS)
+CFLAGS ?= -O2
+LIBTREE_CFLAGS := $(CFLAGS) -Wall -std=c99 -D_FILE_OFFSET_BITS=64
 
 all: libtree
 
