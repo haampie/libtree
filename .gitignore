@@ -10,3 +10,5 @@ spack.lock
 .spack-env
 ._view
 ci/view
+
+result
