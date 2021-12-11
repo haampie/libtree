@@ -13,7 +13,7 @@ A tool that:
 ```
 git clone https://github.com/haampie/libtree.git
 cd libtree
-make # recommended: CFLAGS="-static"
+make # recommended: LDFLAGS=-static
 ```
 
 <details>
