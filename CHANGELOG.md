@@ -1,3 +1,6 @@
+# v3.0.0-rc3
+- Fixes more memory issues
+
 # v3.0.0-rc2
 - Fixes a memory issue when running libtree on many files
 
