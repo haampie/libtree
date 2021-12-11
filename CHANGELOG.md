@@ -1,4 +1,7 @@
-# v3.0.0-dev
+# v3.0.0-rc2
+- Fixes a memory issue when running libtree on many files
+
+# v3.0.0-rc1
 - Rewritten in C99 without 0 external dependencies.
 - Significantly faster & smaller (~50KB statically compiled with musl libc, or
   even smaller than the source file with diet libc).
