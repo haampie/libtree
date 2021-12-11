@@ -515,7 +515,12 @@ static int interpolate_variables(struct libtree_state_t *s, size_t src,
     // Did we copy anything? That implies a variable was interpolated.
     // Copy the remainder, including the \0.
     if (prev_src != src) {
-        string_table_store(st, st->arr + prev_src);
+        size_t n = strlen(st->arr + prev_src) + 1;
+        string_table_maybe_grow(st, n);
+        // note: we're copying from within the string table, so we
+        // should not store st->arr + prev_src.
+        memcpy(st->arr + st->n, st->arr + prev_src, n);
+        st->n += n;
         return 1;
     }
 
