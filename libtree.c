@@ -304,7 +304,7 @@ static void string_table_maybe_grow(struct string_table_t *t, size_t n) {
 
     // Otherwise give twice the amount of required space.
     t->capacity = 2 * (t->n + n);
-    char *arr = realloc(t->arr, t->capacity);
+    char *arr = realloc(t->arr, t->capacity * sizeof(char));
     if (arr == NULL) {
         exit(1);
     }
@@ -758,7 +758,7 @@ static void visited_files_append(struct visited_file_array_t *files,
                                  struct stat *new) {
     if (files->n == files->capacity) {
         files->capacity *= 2;
-        files->arr = realloc(files->arr, files->capacity);
+        files->arr = realloc(files->arr, files->capacity * sizeof(struct visited_file_t));
         if (files->arr == NULL)
             exit(1);
     }
