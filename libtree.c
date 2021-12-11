@@ -45,6 +45,9 @@
 #define ERR_NO_PT_LOAD 19
 #define ERR_VADDRS_NOT_ORDERED 20
 
+#define DT_FLAGS_1 0x6ffffffb
+#define DT_1_NODEFLIB 0x800
+
 #define MAX_OFFSET_T 0xFFFFFFFFFFFFFFFF
 
 #define REGULAR_RED "\033[0;31m"
@@ -600,7 +603,8 @@ static void print_line(size_t depth, char *name, char *color_bold,
 
 static void print_error(size_t depth, size_t needed_not_found,
                         struct small_vec_u64_t *needed_buf_offsets,
-                        char *runpath, struct libtree_state_t *s) {
+                        char *runpath, struct libtree_state_t *s,
+                        int no_def_lib) {
     for (size_t i = 0; i < needed_not_found; ++i) {
         s->found_all_needed[depth] = i + 1 >= needed_not_found;
         tree_preamble(s, depth + 1);
@@ -695,16 +699,33 @@ static void print_error(size_t depth, size_t needed_not_found,
     }
 
     fputs(indent, stdout);
-    fputs(s->color ? BRIGHT_BLACK " 4. ld.so.conf:" CLEAR "\n"
-                   : " 4. ld.so.conf:\n",
-          stdout);
+    if (no_def_lib) {
+        fputs(s->color ? BRIGHT_BLACK
+                  " 4. ld.so.conf not considered due to NODEFLIB flag" CLEAR
+                  "\n"
+                       : " 4. ld.so.conf not considered due to NODEFLIB flag\n",
+              stdout);
+    } else {
+        fputs(s->color ? BRIGHT_BLACK " 4. ld.so.conf:" CLEAR "\n"
+                       : " 4. ld.so.conf:\n",
+              stdout);
+    }
     print_colon_delimited_paths(s->string_table.arr + s->ld_so_conf_offset,
                                 indent);
 
     fputs(indent, stdout);
-    fputs(s->color ? BRIGHT_BLACK " 5. Standard paths:" CLEAR "\n"
-                   : " 5. Standard paths:\n",
-          stdout);
+    if (no_def_lib) {
+        fputs(s->color
+                  ? BRIGHT_BLACK
+                  " 5. Standard paths not considered due to NODEFLIB flag" CLEAR
+                  "\n"
+                  : " 4. Standard paths not considered due to NODEFLIB flag\n",
+              stdout);
+    } else {
+        fputs(s->color ? BRIGHT_BLACK " 5. Standard paths:" CLEAR "\n"
+                       : " 5. Standard paths:\n",
+              stdout);
+    }
     print_colon_delimited_paths(s->string_table.arr + s->default_paths_offset,
                                 indent);
 
@@ -910,6 +931,11 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
         return ERR_INVALID_DYNAMIC_SECTION;
     }
 
+    // Shared libraries can disable searching in
+    // "default" search paths, aka ld.so.conf and
+    // /usr/lib etc. At least glibc respects this.
+    int no_def_lib = 0;
+
     uint64_t strtab = MAX_OFFSET_T;
     uint64_t rpath = MAX_OFFSET_T;
     uint64_t runpath = MAX_OFFSET_T;
@@ -967,6 +993,9 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
             break;
         case DT_SONAME:
             soname = d_val;
+            break;
+        case DT_FLAGS_1:
+            no_def_lib |= (DT_1_NODEFLIB & d_val) == DT_1_NODEFLIB;
             break;
         }
     }
@@ -1213,14 +1242,14 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
     }
 
     // Check ld.so.conf paths
-    if (needed_not_found) {
+    if (!no_def_lib && needed_not_found) {
         check_search_paths((struct found_t){.how = LD_SO_CONF, .depth = 0},
                            s->ld_so_conf_offset, &needed_not_found,
                            &needed_buf_offsets, depth, s, curr_bits);
     }
 
     // Then consider standard paths
-    if (needed_not_found) {
+    if (!no_def_lib && needed_not_found) {
         check_search_paths((struct found_t){.how = DEFAULT, .depth = 0},
                            s->default_paths_offset, &needed_not_found,
                            &needed_buf_offsets, depth, s, curr_bits);
@@ -1232,7 +1261,7 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
                     runpath == MAX_OFFSET_T
                         ? NULL
                         : s->string_table.arr + runpath_buf_offset,
-                    s);
+                    s, no_def_lib);
         s->string_table.n = old_buf_size;
         small_vec_u64_free(&needed_buf_offsets);
         small_vec_u64_free(&needed);
