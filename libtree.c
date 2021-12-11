@@ -190,9 +190,13 @@ struct libtree_state_t {
     struct string_table_t string_table;
     struct visited_file_array_t visited;
 
-    // rpath substitutions values
+    // rpath substitutions values (note: OSNAME/OSREL are FreeBSD specific, LIB
+    // is glibc/Linux specific -- we substitute all so we can support
+    // cross-compiled binaries).
     char *PLATFORM;
     char *LIB;
+    char *OSNAME;
+    char *OSREL;
 
     // rpath stack: if lib_a needs lib_b needs lib_c and all have rpaths
     // then first lib_c's rpaths are considered, then lib_b's, then lib_a's.
@@ -469,6 +473,12 @@ static int interpolate_variables(struct libtree_state_t *s, size_t src,
         } else if (strncmp(&st->arr[curr_src], "PLATFORM", 8) == 0) {
             var_val = s->PLATFORM;
             curr_src += 8;
+        } else if (strncmp(&st->arr[curr_src], "OSNAME", 6) == 0) {
+            var_val = s->OSNAME;
+            curr_src += 6;
+        } else if (strncmp(&st->arr[curr_src], "OSREL", 5) == 0) {
+            var_val = s->OSREL;
+            curr_src += 5;
         } else {
             continue;
         }
@@ -1416,6 +1426,7 @@ static void parse_ld_library_path(struct libtree_state_t *s) {
 
 static void set_default_paths(struct libtree_state_t *s) {
     s->default_paths_offset = s->string_table.n;
+    // TODO: how to retrieve this list properly at runtime?
     string_table_store(&s->string_table, "/lib:/lib64:/usr/lib:/usr/lib64");
 }
 
@@ -1473,8 +1484,10 @@ int main(int argc, char **argv) {
     // (a) the feature is rarely used
     // (b) it's almost always the same
     s.PLATFORM = uname_val.machine;
+    s.OSNAME = uname_val.sysname;
+    s.OSREL = uname_val.release;
 
-    // Unclear how to detect this at runtime
+    // TODO: how to find this value at runtime?
     s.LIB = "lib";
 
     int opt_help = 0;
