@@ -1436,10 +1436,11 @@ static void set_default_paths(struct libtree_state_t *s) {
 static void libtree_state_init(struct libtree_state_t *s) {
     s->string_table.n = 0;
     s->string_table.capacity = 1024;
-    s->string_table.arr = malloc(s->string_table.capacity);
+    s->string_table.arr = malloc(s->string_table.capacity * sizeof(char));
     s->visited.n = 0;
     s->visited.capacity = 256;
-    s->visited.arr = malloc(s->visited.capacity);
+    s->visited.arr =
+        malloc(s->visited.capacity * sizeof(struct visited_file_t));
 }
 
 static void libtree_state_free(struct libtree_state_t *s) {
