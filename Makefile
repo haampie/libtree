@@ -5,6 +5,11 @@ endif
 CFLAGS ?= -O2
 LIBTREE_CFLAGS := $(CFLAGS) -Wall -std=c99 -D_FILE_OFFSET_BITS=64
 
+PREFIX ?= /usr/local
+BINDIR ?= $(PREFIX)/bin
+
+.PHONY: all check install clean
+
 all: libtree
 
 %.o: %.c
@@ -18,6 +23,9 @@ check: libtree
 		$(MAKE) -C $$dir check; \
 	done
 
+install: all
+	mkdir -p $(DESTDIR)$(BINDIR)
+	cp libtree $(DESTDIR)$(BINDIR)
+
 clean:
 	rm -f *.o libtree
-
