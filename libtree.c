@@ -1572,14 +1572,14 @@ int main(int argc, char **argv) {
               "File names starting with '-', for example '-.so', can be specified as follows:\n"
               "  libtree -- -.so\n"
               "\n"
-              "A. Locating libs options:\n"
+              "Locating libs options:\n"
               "  -p, --path     Show the path of libraries instead of the soname\n"
               "  -v             Show libraries skipped by default*\n"
               "  -vv            Show dependencies of libraries skipped by default*\n"
               "  -vvv           Show dependencies of already encountered libraries\n"
               "\n"
-              "*) For brevity, the following libraries are not shown by default:\n"
-              "   ",
+              "* For brevity, the following libraries are not shown by default:\n"
+              "  ",
               stdout);
         // clang-format on
 
@@ -1587,18 +1587,29 @@ int main(int argc, char **argv) {
         // with some new lines every now and then to make it readable.
         size_t num_excluded = sizeof(exclude_list) / sizeof(char *);
 
-        size_t cursor_x = 4;
+        size_t cursor_x = 3;
         for (size_t j = 0; j < num_excluded; ++j) {
             cursor_x += strlen(exclude_list[j]);
             if (cursor_x > 60) {
-                cursor_x = 4;
-                fputs("\n   ", stdout);
+                cursor_x = 3;
+                fputs("\n  ", stdout);
             }
             fputs(exclude_list[j], stdout);
             if (j + 1 != num_excluded)
                 fputs(", ", stdout);
         }
-        fputs(".\n", stdout);
+
+        // rpath substitution values:
+        fputs(".\n\nThe following rpath/runpath substitutions are used:\n", stdout);
+        fputs("  PLATFORM       ", stdout);
+        fputs(s.PLATFORM, stdout);
+        fputs("\n  LIB            ", stdout);
+        fputs(s.LIB, stdout);
+        fputs("\n  OSNAME         ", stdout);
+        fputs(s.OSNAME, stdout);
+        fputs("\n  OSREL          ", stdout);
+        fputs(s.OSREL, stdout);
+        putchar('\n');
 
         // Return an error status code if no positional args were passed.
         return !opt_help;
