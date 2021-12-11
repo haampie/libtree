@@ -13,4 +13,4 @@ jobs:
       run: make
     
     - name: test
-      run: make -I check || true # notice: verification is not fully automated
+      run: make -i check # notice: verification is not fully automated
