@@ -10,7 +10,7 @@ all: libtree
 	$(CC) $(LIBTREE_CFLAGS) -c $?
 
 libtree: libtree.o
-	$(CC) $(LIBTREE_CFLAGS) -o $@ $?
+	$(CC) $(LDFLAGS) $^ -o $@
 
 check: libtree
 	for dir in $(sort $(wildcard tests/*)); do \
