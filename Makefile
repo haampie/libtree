@@ -13,7 +13,7 @@ libtree: libtree.o
 	$(CC) $(LIBTREE_CFLAGS) -o $@ $?
 
 check: libtree
-	for dir in $(wildcard tests/*); do \
+	for dir in $(sort $(wildcard tests/*)); do \
 		$(MAKE) -C $$dir check; \
 	done
 
