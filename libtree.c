@@ -10,6 +10,8 @@
 #include <sys/utsname.h>
 #include <unistd.h>
 
+#define VERSION "3.0.0-dev"
+
 #define ET_EXEC 2
 #define ET_DYN 3
 
@@ -1616,7 +1618,7 @@ int main(int argc, char **argv) {
     }
 
     if (opt_version) {
-        puts("3.0.0");
+        puts(VERSION);
         return 0;
     }
 
