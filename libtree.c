@@ -758,7 +758,8 @@ static void visited_files_append(struct visited_file_array_t *files,
                                  struct stat *new) {
     if (files->n == files->capacity) {
         files->capacity *= 2;
-        files->arr = realloc(files->arr, files->capacity * sizeof(struct visited_file_t));
+        files->arr = realloc(files->arr,
+                             files->capacity * sizeof(struct visited_file_t));
         if (files->arr == NULL)
             exit(1);
     }
@@ -1602,7 +1603,8 @@ int main(int argc, char **argv) {
         }
 
         // rpath substitution values:
-        fputs(".\n\nThe following rpath/runpath substitutions are used:\n", stdout);
+        fputs(".\n\nThe following rpath/runpath substitutions are used:\n",
+              stdout);
         fputs("  PLATFORM       ", stdout);
         fputs(s.PLATFORM, stdout);
         fputs("\n  LIB            ", stdout);
