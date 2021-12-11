@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.20)
 
 # Test dependencies
 find_package(GTest REQUIRED)
-find_program(BASH_PROGRAM bash REQUIRED)
+find_program(SH_PROGRAM sh REQUIRED)
 
 add_executable(deps src/deps.cpp)
 target_link_libraries(deps libtree_lib GTest::gtest_main)
@@ -18,6 +18,6 @@ add_test(NAME ld_so_conf COMMAND ld_so_conf ${CMAKE_CURRENT_SOURCE_DIR}/ld_so_co
 # Integration tests
 add_subdirectory(integration)
 
-if(BASH_PROGRAM)
-    add_test(NAME integration_test COMMAND ${BASH_PROGRAM} ${CMAKE_CURRENT_BINARY_DIR}/integration/run_test.sh $<TARGET_FILE:libtree>)
+if(SH_PROGRAM)
+    add_test(NAME integration_test COMMAND ${SH_PROGRAM} ${CMAKE_CURRENT_BINARY_DIR}/integration/run_test.sh $<TARGET_FILE:libtree>)
 endif()

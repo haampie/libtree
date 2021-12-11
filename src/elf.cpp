@@ -7,8 +7,12 @@
 #include <regex>
 
 static const std::regex s_origin{"\\$(ORIGIN|\\{ORIGIN\\})"};
-static const std::regex s_lib{"\\$(LIB|\\{LIB\\})"};
 static const std::regex s_platform{"\\$(PLATFORM|\\{PLATFORM\\})"};
+// Linux-only:
+static const std::regex s_lib{"\\$(LIB|\\{LIB\\})"};
+// FreeBSD-only:
+static const std::regex s_osname{"\\$(OSNAME|\\{OSNAME\\})"};
+static const std::regex s_osrel{"\\$(OSREL|\\{OSREL\\})"};
 
 std::ostream &operator<<(std::ostream &os, Elf const &elf) {
     os << termcolor::on_green << (elf.type == deploy_t::EXECUTABLE ? "Executable" : "Shared library") << termcolor::reset << ' ';
@@ -36,16 +40,20 @@ size_t PathHash::operator()(fs::path const &path) const {
 }
 
 // Applies substitutions like $ORIGIN := current work directory
-fs::path apply_substitutions(fs::path const &rpath, fs::path const &cwd, elf_type_t type, std::string const &platform) {
-	std::string path = rpath;
+fs::path apply_substitutions(fs::path const &rpath, fs::path const &cwd, elf_type_t type, std::string const &platform, struct utsname const &uts) {
+    std::string path = rpath;
 
+    path = std::regex_replace(path, s_origin, cwd.string());
+    path = std::regex_replace(path, s_platform, platform);
+#if defined(__linux__)
     auto substitute_lib = (type == elf_type_t::ELF_32 ? "lib" : "lib64");
-	
-	path = std::regex_replace(path, s_origin, cwd.string());
-	path = std::regex_replace(path, s_lib, substitute_lib);
-	path = std::regex_replace(path, s_platform, platform);
+    path = std::regex_replace(path, s_lib, substitute_lib);
+#elif defined(__FreeBSD__)
+    path = std::regex_replace(path, s_osname, uts.sysname);
+    path = std::regex_replace(path, s_osrel, uts.release);
+#endif
 
-	return path;
+    return path;
 }
 
 // Turns path1:path2 into [path1, path2]
@@ -62,7 +70,7 @@ std::vector<fs::path> split_paths(std::string_view raw_path) {
     return rpaths;
 }
 
-std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path path_str, std::string const &platform, std::optional<elf_type_t> required_type) {
+std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path path_str, std::string const &platform, struct utsname const &uts, std::optional<elf_type_t> required_type) {
     // Extract some data from the elf file.
     std::vector<fs::path> needed, rpaths, runpaths;
 
@@ -108,10 +116,10 @@ std::optional<Elf> from_path(deploy_t type, found_t found_via, fs::path path_str
                 needed.push_back(str);
             } else if (tag == DT_RUNPATH) {
                 for (auto const &path : split_paths(str))
-                    runpaths.push_back(apply_substitutions(path, cwd, elf_type, platform));
+                    runpaths.push_back(apply_substitutions(path, cwd, elf_type, platform, uts));
             } else if (tag == DT_RPATH) {
                 for (auto const &path : split_paths(str))
-                    rpaths.push_back(apply_substitutions(path, cwd, elf_type, platform));
+                    rpaths.push_back(apply_substitutions(path, cwd, elf_type, platform, uts));
             } else if (tag == DT_SONAME) {
                 name = str;
             } else if (tag == DT_NULL) {

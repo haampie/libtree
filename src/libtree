@@ -1,8 +1,8 @@
-#!/bin/bash
+#!/bin/sh
 
-DIR=$(dirname $(readlink -f $0))
+DIR="$(dirname "$(readlink -f "$0")")"
 
 export LD_LIBRARY_PATH="$DIR/usr/lib:$LD_LIBRARY_PATH"
 export PATH="$DIR/usr/bin:$PATH"
 
-$DIR/usr/bin/libtree $@
+"$DIR/usr/bin/libtree" "$@"

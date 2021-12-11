@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 cd "$(dirname "$0")"
 
@@ -9,20 +9,24 @@ if [ $# -ne 1 ]; then
     exit 1
 fi
 
-# Test without setting LD_LIBRARY_PATH
-TEST_1=`$1 src/main`
-EXPECTED_1=$(cat test_1_out.txt)
+if [ "$(uname -s)" = "Linux" ]; then
+    DIFF="diff --color"
+else
+    DIFF="diff"
+fi
 
-if [ "$TEST_1" != "$EXPECTED_1" ]; then
-    diff --color <( echo "$TEST_1" ) <( echo "$EXPECTED_1")
+# Test without setting LD_LIBRARY_PATH
+"$1" src/main > test_1_out.txt
+
+if ! cmp --silent -- test_1_out.txt test_1_expected.txt; then
+    $DIFF test_1_out.txt test_1_expected.txt
     exit 1
 fi
 
 # Test with LD_LIBRARY_PATH
-TEST_2=`LD_LIBRARY_PATH=$PWD/src/a/b/c $1 src/main`
-EXPECTED_2=$(cat test_2_out.txt)
+LD_LIBRARY_PATH="$PWD/src/a/b/c" "$1" src/main > test_2_out.txt
 
-if [ "$TEST_2" != "$EXPECTED_2" ]; then
-    diff --color <( echo "$TEST_2" ) <( echo "$EXPECTED_2")
+if ! cmp --silent -- test_2_out.txt test_2_expected.txt; then
+    $DIFF test_2_out.txt test_2_expected.txt
     exit 1
 fi

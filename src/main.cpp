@@ -1,6 +1,9 @@
-#if defined(LIBTREE_HAS_AUXV_HEADER)
+#if defined(LIBTREE_HAS_AUXV_HEADER) && defined(__linux__)
 #include <sys/auxv.h>
 #endif
+
+#include <sys/utsname.h>
+#include <errno.h>
 
 #include <cxxopts.hpp>
 #include <termcolor/termcolor.hpp>
@@ -18,11 +21,24 @@ namespace fs = std::filesystem;
 int main(int argc, char ** argv) {
     cxxopts::Options options("libtree", "Show the dependency tree of binaries and optionally bundle them into a single folder.");
 
-#if defined(LIBTREE_HAS_AUXV_HEADER)
+    struct utsname uts;
+    if (uname(&uts) != 0) {
+        std::cerr << termcolor::bold << termcolor::red << "ERROR: " << termcolor::reset;
+        std::cerr << termcolor::red << strerror(errno) << termcolor::reset << std::endl;
+        return 1;
+    }
+
+#if defined(LIBTREE_HAS_AUXV_HEADER) && defined(__linux__)
     auto default_platform = reinterpret_cast<char const *>(getauxval(AT_PLATFORM));
 #else
-    // Default to x86_64 substitution for PLATFORM if getauxval is not available.
-    auto default_platform = "x86_64";
+    // Default to uname-based substitution for PLATFORM if getauxval is not available.
+    auto default_platform = uts.machine;
+#endif
+
+#if defined(__FreeBSD__)
+    auto default_ldconf = "/etc/ld-elf.so.conf";
+#else
+    auto default_ldconf = "/etc/ld.so.conf";
 #endif
 
     // Use the strip and chrpath that we ship if we can detect them
@@ -35,7 +51,7 @@ int main(int argc, char ** argv) {
       ("p,path", "Show the path of libraries instead of their SONAME", cxxopts::value<bool>()->default_value("false"))
       ("v,verbose", "Show the skipped libraries without their children", cxxopts::value<bool>()->default_value("false"))
       ("a,all", "Show the skipped libraries and their children", cxxopts::value<bool>()->default_value("false"))
-      ("l,ldconf", "Path to custom ld.conf to test settings", cxxopts::value<std::string>()->default_value("/etc/ld.so.conf"))
+      ("l,ldconf", "Path to custom ld.conf to test settings", cxxopts::value<std::string>()->default_value(default_ldconf))
       ("s,skip", "Skip library and its dependencies from being deployed or inspected", cxxopts::value<std::vector<std::string>>())
       ("platform", "Platform used for interpolation in rpaths", cxxopts::value<std::string>()->default_value(default_platform))
       ("b,binary", "Binary to inspect", cxxopts::value<std::vector<std::string>>());
@@ -44,7 +60,7 @@ int main(int argc, char ** argv) {
       ("d,destination", "OPTIONAL: When a destination is set to a folder, all binaries and their dependencies are copied over", cxxopts::value<std::string>())
       ("strip", "Call strip on binaries when deploying", cxxopts::value<bool>()->default_value("false"))
       ("chrpath", "Call chrpath on binaries when deploying", cxxopts::value<bool>()->default_value("false"));
-    
+
     options.add_options()
         ("h,help", "Print usage")
         ("version", "Print version info");
@@ -68,7 +84,7 @@ int main(int argc, char ** argv) {
                 continue;
 
             auto type = is_lib(fs::canonical(binary)) ? deploy_t::LIBRARY : deploy_t::EXECUTABLE;
-            auto val = from_path(type, found_t::NONE, binary, platform);
+            auto val = from_path(type, found_t::NONE, binary, platform, uts);
             if (val != std::nullopt)
                 pool.push_back(*val);
         }
@@ -107,6 +123,7 @@ int main(int argc, char ** argv) {
         std::move(ld_library_paths),
         std::move(generatedExcludelist),
         platform,
+        uts,
         verbosity,
         print_paths
     };
