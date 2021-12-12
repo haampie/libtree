@@ -1095,10 +1095,10 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
     char origin[4096];
     char *last_slash = strrchr(current_file, '/');
     if (last_slash != NULL) {
-        // we're also copying the last /.
-        size_t bytes = last_slash - current_file + 1;
+        // Exclude the last slash
+        size_t bytes = last_slash - current_file;
         memcpy(origin, current_file, bytes);
-        origin[bytes + 1] = '\0';
+        origin[bytes] = '\0';
     } else {
         // this only happens when the input is relative (e.g. in current dir)
         memcpy(origin, "./", 3);
