@@ -3,7 +3,8 @@ include $(CURDIR)/Make.user
 endif
 
 CFLAGS ?= -O2
-LIBTREE_CFLAGS := $(CFLAGS) -Wall -std=c99 -D_FILE_OFFSET_BITS=64
+LIBTREE_CFLAGS := -std=c99 -Wall -Wextra -Wshadow -pedantic
+LIBTREE_DEFINES := -D_FILE_OFFSET_BITS=64
 
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
@@ -13,7 +14,7 @@ BINDIR ?= $(PREFIX)/bin
 all: libtree
 
 %.o: %.c
-	$(CC) $(LIBTREE_CFLAGS) -c $?
+	$(CC) $(CFLAGS) $(LIBTREE_CFLAGS) $(LIBTREE_DEFINES) -c $?
 
 libtree: libtree.o
 	$(CC) $(LDFLAGS) $^ -o $@
