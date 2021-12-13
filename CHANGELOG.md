@@ -1,3 +1,6 @@
+# v3.0.0-rc6
+- Support relative includes in /etc/ld.so.conf
+
 # v3.0.0-rc5
 - Make sure ISA's match
 
