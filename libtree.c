@@ -1513,15 +1513,9 @@ static int print_tree(int pathc, char **pathv, struct libtree_state_t *s) {
             recurse(pathv[i], 0, s, EITHER, (struct found_t){.how = INPUT});
         if (code != 0) {
             exit_code = code;
-
-            // "Error [file]: <err>" if > 1 file, otherwise just "Error: <err>"
-            if (pathc > 1) {
-                fputs("Error [", stderr);
-                fputs(pathv[i], stderr);
-                fputs("]: ", stderr);
-            } else {
-                fputs("Error: ", stderr);
-            }
+            fputs("Error [", stderr);
+            fputs(pathv[i], stderr);
+            fputs("]: ", stderr);
         }
         char *msg = NULL;
         switch (code) {
