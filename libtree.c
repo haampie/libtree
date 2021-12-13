@@ -26,26 +26,27 @@
 #define DT_RPATH 15
 #define DT_RUNPATH 29
 
-#define ERR_INVALID_MAGIC 1
-#define ERR_INVALID_CLASS 2
-#define ERR_INVALID_DATA 3
-#define ERR_INVALID_HEADER 4
-#define ERR_INVALID_BITS 5
-#define ERR_UNSUPPORTED_ELF_FILE 6
-#define ERR_NO_EXEC_OR_DYN 7
-#define ERR_INVALID_PHOFF 8
-#define ERR_INVALID_PROG_HEADER 9
-#define ERR_CANT_STAT 10
-#define ERR_INVALID_DYNAMIC_SECTION 11
-#define ERR_INVALID_DYNAMIC_ARRAY_ENTRY 12
-#define ERR_NO_STRTAB 13
-#define ERR_INVALID_SONAME 14
-#define ERR_INVALID_RPATH 15
-#define ERR_INVALID_RUNPATH 16
-#define ERR_INVALID_NEEDED 17
-#define ERR_NOT_FOUND 18
-#define ERR_NO_PT_LOAD 19
-#define ERR_VADDRS_NOT_ORDERED 20
+#define ERR_INVALID_MAGIC 11
+#define ERR_INVALID_CLASS 12
+#define ERR_INVALID_DATA 13
+#define ERR_INVALID_HEADER 14
+#define ERR_INVALID_BITS 15
+#define ERR_INVALID_ENDIANNESS 16
+#define ERR_NO_EXEC_OR_DYN 17
+#define ERR_INVALID_PHOFF 18
+#define ERR_INVALID_PROG_HEADER 19
+#define ERR_CANT_STAT 20
+#define ERR_INVALID_DYNAMIC_SECTION 21
+#define ERR_INVALID_DYNAMIC_ARRAY_ENTRY 22
+#define ERR_NO_STRTAB 23
+#define ERR_INVALID_SONAME 24
+#define ERR_INVALID_RPATH 25
+#define ERR_INVALID_RUNPATH 26
+#define ERR_INVALID_NEEDED 27
+#define ERR_DEPENDENCY_NOT_FOUND 28
+#define ERR_NO_PT_LOAD 29
+#define ERR_VADDRS_NOT_ORDERED 30
+#define ERROR_COULD_NOT_OPEN_FILE 31
 
 #define DT_FLAGS_1 0x6ffffffb
 #define DT_1_NODEFLIB 0x800
@@ -374,10 +375,29 @@ static int recurse(char *current_file, size_t depth,
                    struct libtree_state_t *state, elf_bits_t bits,
                    struct found_t reason);
 
-static void check_absolute_paths(size_t *needed_not_found,
-                                 struct small_vec_u64_t *needed_buf_offsets,
-                                 size_t depth, struct libtree_state_t *s,
-                                 elf_bits_t bits) {
+static void apply_exclude_list(size_t *needed_not_found,
+                               struct small_vec_u64_t *needed_buf_offsets,
+                               struct libtree_state_t *s) {
+    for (size_t i = 0; i < *needed_not_found;) {
+        // If in exclude list, swap to the back.
+        if (is_in_exclude_list(s->string_table.arr +
+                               needed_buf_offsets->p[i])) {
+            size_t tmp = needed_buf_offsets->p[i];
+            needed_buf_offsets->p[i] =
+                needed_buf_offsets->p[*needed_not_found - 1];
+            needed_buf_offsets->p[--*needed_not_found] = tmp;
+            continue;
+        } else {
+            ++i;
+        }
+    }
+}
+
+static int check_absolute_paths(size_t *needed_not_found,
+                                struct small_vec_u64_t *needed_buf_offsets,
+                                size_t depth, struct libtree_state_t *s,
+                                elf_bits_t bits) {
+    int exit_code = 0;
     // First go over absolute paths in needed libs.
     for (size_t i = 0; i < *needed_not_found;) {
         struct string_table_t const *st = &s->string_table;
@@ -407,9 +427,18 @@ static void check_absolute_paths(size_t *needed_not_found,
         // nonsensical. This is allowed by glibc though.
         if (path[0] != '/') {
             err = " is not absolute";
-        } else if (recurse(path, depth + 1, s, bits,
-                           (struct found_t){.how = DIRECT}) != 0) {
-            err = " not found";
+            exit_code = ERR_DEPENDENCY_NOT_FOUND;
+        } else {
+            int code = recurse(path, depth + 1, s, bits,
+                               (struct found_t){.how = DIRECT});
+            if (code == ERR_DEPENDENCY_NOT_FOUND)
+                exit_code = ERR_DEPENDENCY_NOT_FOUND;
+
+            // Check if there was an issue with the direct dep and ignore errors
+            // of transient deps.
+            if (code != 0 && code != ERR_DEPENDENCY_NOT_FOUND) {
+                err = " not found";
+            }
         }
 
         if (err) {
@@ -426,13 +455,16 @@ static void check_absolute_paths(size_t *needed_not_found,
         needed_buf_offsets->p[i] = needed_buf_offsets->p[*needed_not_found - 1];
         needed_buf_offsets->p[--*needed_not_found] = tmp;
     }
+
+    return exit_code;
 }
 
-static void check_search_paths(struct found_t reason, size_t offset,
-                               size_t *needed_not_found,
-                               struct small_vec_u64_t *needed_buf_offsets,
-                               size_t depth, struct libtree_state_t *s,
-                               elf_bits_t bits) {
+static int check_search_paths(struct found_t reason, size_t offset,
+                              size_t *needed_not_found,
+                              struct small_vec_u64_t *needed_buf_offsets,
+                              size_t depth, struct libtree_state_t *s,
+                              elf_bits_t bits) {
+    int exit_code = 0;
     char path[4096];
     char *path_end = path + 4096;
 
@@ -445,7 +477,7 @@ static void check_search_paths(struct found_t reason, size_t offset,
 
         // Check if it was only colons
         if (st->arr[offset] == '\0')
-            return;
+            return exit_code;
 
         // Copy the search path until the first \0 or :
         char *dest = path;
@@ -478,9 +510,13 @@ static void check_search_paths(struct found_t reason, size_t offset,
             s->found_all_needed[depth] = *needed_not_found <= 1;
 
             // And try to locate the lib.
-            if (recurse(path, depth + 1, s, bits, reason) == 0) {
-                // Found it, so swap out the current soname to the back,
-                // and reduce the number of to be found by one.
+            int code = recurse(path, depth + 1, s, bits, reason);
+            if (code == ERR_DEPENDENCY_NOT_FOUND)
+                exit_code = ERR_DEPENDENCY_NOT_FOUND;
+            if (code == 0 || code == ERR_DEPENDENCY_NOT_FOUND) {
+                // Found at least the direct dependency, so swap out the current
+                // soname to the back and reduce the number of to be found by
+                // one.
                 size_t tmp = needed_buf_offsets->p[i];
                 needed_buf_offsets->p[i] =
                     needed_buf_offsets->p[*needed_not_found - 1];
@@ -490,6 +526,8 @@ static void check_search_paths(struct found_t reason, size_t offset,
             }
         }
     }
+
+    return exit_code;
 }
 
 static int interpolate_variables(struct libtree_state_t *s, size_t src,
@@ -827,8 +865,9 @@ static void visited_files_append(struct visited_file_array_t *files,
 static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
                    elf_bits_t parent_bits, struct found_t reason) {
     FILE *fptr = fopen(current_file, "rb");
+
     if (fptr == NULL)
-        return 1;
+        return ERROR_COULD_NOT_OPEN_FILE;
 
     // When we're done recursing, we should give back the memory we've claimed.
     size_t old_buf_size = s->string_table.n;
@@ -871,7 +910,7 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
     // Byte swapping is on the TODO list
     if (is_little_endian ^ host_is_little_endian()) {
         fclose(fptr);
-        return ERR_UNSUPPORTED_ELF_FILE;
+        return ERR_INVALID_ENDIANNESS;
     }
 
     // And get the type
@@ -1226,27 +1265,17 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
 
     // Finally start searching.
 
+    int exit_code = 0;
+
     size_t needed_not_found = needed_buf_offsets.n;
 
     // Skip common libraries if not verbose
-    if (needed_not_found && s->verbosity == 0) {
-        for (size_t i = 0; i < needed_not_found;) {
-            // If in exclude list, swap to the back.
-            if (is_in_exclude_list(s->string_table.arr +
-                                   needed_buf_offsets.p[i])) {
-                size_t tmp = needed_buf_offsets.p[i];
-                needed_buf_offsets.p[i] =
-                    needed_buf_offsets.p[needed_not_found - 1];
-                needed_buf_offsets.p[--needed_not_found] = tmp;
-                continue;
-            } else {
-                ++i;
-            }
-        }
-    }
+    if (needed_not_found && s->verbosity == 0)
+        apply_exclude_list(&needed_not_found, &needed_buf_offsets, s);
 
-    check_absolute_paths(&needed_not_found, &needed_buf_offsets, depth, s,
-                         curr_bits);
+    if (needed_not_found)
+        exit_code |= check_absolute_paths(
+            &needed_not_found, &needed_buf_offsets, depth, s, curr_bits);
 
     // Consider rpaths only when runpath is empty
     if (runpath == MAX_OFFSET_T) {
@@ -1256,38 +1285,38 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
             if (s->rpath_offsets[j] == SIZE_MAX)
                 continue;
 
-            check_search_paths((struct found_t){.how = RPATH, .depth = j},
-                               s->rpath_offsets[j], &needed_not_found,
-                               &needed_buf_offsets, depth, s, curr_bits);
+            exit_code |= check_search_paths(
+                (struct found_t){.how = RPATH, .depth = j}, s->rpath_offsets[j],
+                &needed_not_found, &needed_buf_offsets, depth, s, curr_bits);
         }
     }
 
     // Then try LD_LIBRARY_PATH, if we have it.
     if (needed_not_found && s->ld_library_path_offset != SIZE_MAX) {
-        check_search_paths((struct found_t){.how = LD_LIBRARY_PATH},
-                           s->ld_library_path_offset, &needed_not_found,
-                           &needed_buf_offsets, depth, s, curr_bits);
+        exit_code |= check_search_paths(
+            (struct found_t){.how = LD_LIBRARY_PATH}, s->ld_library_path_offset,
+            &needed_not_found, &needed_buf_offsets, depth, s, curr_bits);
     }
 
     // Then consider runpaths
     if (needed_not_found && runpath != MAX_OFFSET_T) {
-        check_search_paths((struct found_t){.how = RUNPATH}, runpath_buf_offset,
-                           &needed_not_found, &needed_buf_offsets, depth, s,
-                           curr_bits);
+        exit_code |= check_search_paths(
+            (struct found_t){.how = RUNPATH}, runpath_buf_offset,
+            &needed_not_found, &needed_buf_offsets, depth, s, curr_bits);
     }
 
     // Check ld.so.conf paths
-    if (!no_def_lib && needed_not_found) {
-        check_search_paths((struct found_t){.how = LD_SO_CONF},
-                           s->ld_so_conf_offset, &needed_not_found,
-                           &needed_buf_offsets, depth, s, curr_bits);
+    if (needed_not_found && !no_def_lib) {
+        exit_code |= check_search_paths(
+            (struct found_t){.how = LD_SO_CONF}, s->ld_so_conf_offset,
+            &needed_not_found, &needed_buf_offsets, depth, s, curr_bits);
     }
 
     // Then consider standard paths
-    if (!no_def_lib && needed_not_found) {
-        check_search_paths((struct found_t){.how = DEFAULT},
-                           s->default_paths_offset, &needed_not_found,
-                           &needed_buf_offsets, depth, s, curr_bits);
+    if (needed_not_found && !no_def_lib) {
+        exit_code |= check_search_paths(
+            (struct found_t){.how = DEFAULT}, s->default_paths_offset,
+            &needed_not_found, &needed_buf_offsets, depth, s, curr_bits);
     }
 
     // Finally summarize those that could not be found.
@@ -1300,15 +1329,14 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
         s->string_table.n = old_buf_size;
         small_vec_u64_free(&needed_buf_offsets);
         small_vec_u64_free(&needed);
-        // return ERR_NOT_FOUND;
-        return 0;
+        return ERR_DEPENDENCY_NOT_FOUND;
     }
 
     // Free memory in our string table
     s->string_table.n = old_buf_size;
     small_vec_u64_free(&needed_buf_offsets);
     small_vec_u64_free(&needed);
-    return 0;
+    return exit_code;
 }
 
 static int parse_ld_config_file(struct string_table_t *st, char *path);
@@ -1478,17 +1506,82 @@ static int print_tree(int pathc, char **pathv, struct libtree_state_t *s) {
     parse_ld_library_path(s);
     set_default_paths(s);
 
-    int libtree_last_err = 0;
+    int exit_code = 0;
 
     for (int i = 0; i < pathc; ++i) {
-        int result =
+        int code =
             recurse(pathv[i], 0, s, EITHER, (struct found_t){.how = INPUT});
-        if (result != 0)
-            libtree_last_err = result;
+        if (code != 0)
+            exit_code = code;
+        switch (code) {
+        case ERR_INVALID_MAGIC:
+            fputs("Error: Invalid ELF magic bytes\n", stderr);
+            break;
+        case ERR_INVALID_CLASS:
+            fputs("Error: Invalid ELF class\n", stderr);
+            break;
+        case ERR_INVALID_DATA:
+            fputs("Error: Invalid ELF data\n", stderr);
+            break;
+        case ERR_INVALID_HEADER:
+            fputs("Error: Invalid ELF header\n", stderr);
+            break;
+        case ERR_INVALID_BITS:
+            fputs("Error: Invalid bits\n", stderr);
+            break;
+        case ERR_INVALID_ENDIANNESS:
+            fputs("Error: Invalid endianness\n", stderr);
+            break;
+        case ERR_NO_EXEC_OR_DYN:
+            fputs("Error: Not an ET_EXEC or ET_DYN ELF file\n", stderr);
+            break;
+        case ERR_INVALID_PHOFF:
+            fputs("Error: Invalid ELF program header offset\n", stderr);
+            break;
+        case ERR_INVALID_PROG_HEADER:
+            fputs("Error: Invalid ELF program header\n", stderr);
+            break;
+        case ERR_CANT_STAT:
+            fputs("Error: Can't stat file\n", stderr);
+            break;
+        case ERR_INVALID_DYNAMIC_SECTION:
+            fputs("Error: Invalid ELF dynamic section\n", stderr);
+            break;
+        case ERR_INVALID_DYNAMIC_ARRAY_ENTRY:
+            fputs("Error: Invalid ELF dynamic array entry\n", stderr);
+            break;
+        case ERR_NO_STRTAB:
+            fputs("Error: No ELF string table found\n", stderr);
+            break;
+        case ERR_INVALID_SONAME:
+            fputs("Error: Can't read DT_SONAME\n", stderr);
+            break;
+        case ERR_INVALID_RPATH:
+            fputs("Error: Can't read DT_RPATH\n", stderr);
+            break;
+        case ERR_INVALID_RUNPATH:
+            fputs("Error: Can't read DT_RUNPATH\n", stderr);
+            break;
+        case ERR_INVALID_NEEDED:
+            fputs("Error: Can't read DT_NEEDED\n", stderr);
+            break;
+        case ERR_DEPENDENCY_NOT_FOUND:
+            fputs("Error: Not all dependencies were found\n", stderr);
+            break;
+        case ERR_NO_PT_LOAD:
+            fputs("Error: No PT_LOAD found in ELF file\n", stderr);
+            break;
+        case ERR_VADDRS_NOT_ORDERED:
+            fputs("Error: virtual addresses are not ordered\n", stderr);
+            break;
+        case ERROR_COULD_NOT_OPEN_FILE:
+            fputs("Error: could not open file\n", stderr);
+            break;
+        }
     }
 
     libtree_state_free(s);
-    return libtree_last_err;
+    return exit_code;
 }
 
 int main(int argc, char **argv) {
