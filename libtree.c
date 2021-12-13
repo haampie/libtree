@@ -374,6 +374,60 @@ static int recurse(char *current_file, size_t depth,
                    struct libtree_state_t *state, elf_bits_t bits,
                    struct found_t reason);
 
+static void check_absolute_paths(size_t *needed_not_found,
+                                 struct small_vec_u64_t *needed_buf_offsets,
+                                 size_t depth, struct libtree_state_t *s,
+                                 elf_bits_t bits) {
+    // First go over absolute paths in needed libs.
+    for (size_t i = 0; i < *needed_not_found;) {
+        struct string_table_t const *st = &s->string_table;
+
+        // Skip dt_needed that have do not contain /
+        if (strchr(st->arr + needed_buf_offsets->p[i], '/') == NULL) {
+            ++i;
+            continue;
+        }
+
+        // Copy the path over.
+        char path[4096];
+        size_t len = strlen(st->arr + needed_buf_offsets->p[i]);
+
+        // Unlikely to happen but good to guard against
+        if (len >= 4096)
+            continue;
+
+        // Include \0
+        memcpy(path, st->arr + needed_buf_offsets->p[i], len + 1);
+
+        s->found_all_needed[depth] = *needed_not_found <= 1;
+        char *err = NULL;
+
+        // If it is not an absolute path, we bail, cause it then starts to
+        // depend on the current working directory, which is rather
+        // nonsensical. This is allowed by glibc though.
+        if (path[0] != '/') {
+            err = " is not absolute";
+        } else if (recurse(path, depth + 1, s, bits,
+                           (struct found_t){.how = DIRECT}) != 0) {
+            err = " not found";
+        }
+
+        if (err) {
+            tree_preamble(s, depth + 1);
+            if (s->color)
+                fputs(BOLD_RED, stdout);
+            fputs(path, stdout);
+            fputs(" is not absolute", stdout);
+            fputs(s->color ? CLEAR "\n" : "\n", stdout);
+        }
+
+        // Handled this library, so swap to the back.
+        size_t tmp = needed_buf_offsets->p[i];
+        needed_buf_offsets->p[i] = needed_buf_offsets->p[*needed_not_found - 1];
+        needed_buf_offsets->p[--*needed_not_found] = tmp;
+    }
+}
+
 static void check_search_paths(struct found_t reason, size_t offset,
                                size_t *needed_not_found,
                                struct small_vec_u64_t *needed_buf_offsets,
@@ -1195,42 +1249,8 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
         }
     }
 
-    // First go over absolute paths in needed libs.
-    for (size_t i = 0; i < needed_not_found;) {
-        char *name = s->string_table.arr + needed_buf_offsets.p[i];
-        if (strchr(name, '/') != NULL) {
-            // If it is not an absolute path, we bail, cause it then starts to
-            // depend on the current working directory, which is rather
-            // nonsensical. This is allowed by glibc though.
-            s->found_all_needed[depth] = needed_not_found <= 1;
-            if (name[0] != '/') {
-                tree_preamble(s, depth + 1);
-                if (s->color)
-                    fputs(BOLD_RED, stdout);
-                fputs(name, stdout);
-                fputs(" is not absolute", stdout);
-                fputs(s->color ? CLEAR "\n" : "\n", stdout);
-            } else if (recurse(name, depth + 1, s, curr_bits,
-                               (struct found_t){.how = DIRECT, .depth = 0}) !=
-                       0) {
-                tree_preamble(s, depth + 1);
-                if (s->color)
-                    fputs(BOLD_RED, stdout);
-                fputs(name, stdout);
-                fputs(" not found", stdout);
-                fputs(s->color ? CLEAR "\n" : "\n", stdout);
-            }
-
-            // Even if not officially found, we mark it as found, cause we
-            // handled the error here
-            size_t tmp = needed_buf_offsets.p[i];
-            needed_buf_offsets.p[i] =
-                needed_buf_offsets.p[needed_not_found - 1];
-            needed_buf_offsets.p[--needed_not_found] = tmp;
-        } else {
-            ++i;
-        }
-    }
+    check_absolute_paths(&needed_not_found, &needed_buf_offsets, depth, s,
+                         curr_bits);
 
     // Consider rpaths only when runpath is empty
     if (runpath == MAX_OFFSET_T) {
@@ -1248,28 +1268,28 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
 
     // Then try LD_LIBRARY_PATH, if we have it.
     if (needed_not_found && s->ld_library_path_offset != SIZE_MAX) {
-        check_search_paths((struct found_t){.how = LD_LIBRARY_PATH, .depth = 0},
+        check_search_paths((struct found_t){.how = LD_LIBRARY_PATH},
                            s->ld_library_path_offset, &needed_not_found,
                            &needed_buf_offsets, depth, s, curr_bits);
     }
 
     // Then consider runpaths
     if (needed_not_found && runpath != MAX_OFFSET_T) {
-        check_search_paths((struct found_t){.how = RUNPATH, .depth = 0},
-                           runpath_buf_offset, &needed_not_found,
-                           &needed_buf_offsets, depth, s, curr_bits);
+        check_search_paths((struct found_t){.how = RUNPATH}, runpath_buf_offset,
+                           &needed_not_found, &needed_buf_offsets, depth, s,
+                           curr_bits);
     }
 
     // Check ld.so.conf paths
     if (!no_def_lib && needed_not_found) {
-        check_search_paths((struct found_t){.how = LD_SO_CONF, .depth = 0},
+        check_search_paths((struct found_t){.how = LD_SO_CONF},
                            s->ld_so_conf_offset, &needed_not_found,
                            &needed_buf_offsets, depth, s, curr_bits);
     }
 
     // Then consider standard paths
     if (!no_def_lib && needed_not_found) {
-        check_search_paths((struct found_t){.how = DEFAULT, .depth = 0},
+        check_search_paths((struct found_t){.how = DEFAULT},
                            s->default_paths_offset, &needed_not_found,
                            &needed_buf_offsets, depth, s, curr_bits);
     }
@@ -1465,8 +1485,8 @@ static int print_tree(int pathc, char **pathv, struct libtree_state_t *s) {
     int libtree_last_err = 0;
 
     for (int i = 0; i < pathc; ++i) {
-        int result = recurse(pathv[i], 0, s, EITHER,
-                             (struct found_t){.how = INPUT, .depth = 0});
+        int result =
+            recurse(pathv[i], 0, s, EITHER, (struct found_t){.how = INPUT});
         if (result != 0)
             libtree_last_err = result;
     }
