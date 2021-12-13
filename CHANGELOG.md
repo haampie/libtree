@@ -1,3 +1,6 @@
+# v3.0.0-rc4
+- Print error messages
+
 # v3.0.0-rc3
 - Fixes more memory issues
 
