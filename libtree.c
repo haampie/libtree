@@ -1511,73 +1511,87 @@ static int print_tree(int pathc, char **pathv, struct libtree_state_t *s) {
     for (int i = 0; i < pathc; ++i) {
         int code =
             recurse(pathv[i], 0, s, EITHER, (struct found_t){.how = INPUT});
-        if (code != 0)
+        if (code != 0) {
             exit_code = code;
+
+            // "Error [file]: <err>" if > 1 file, otherwise just "Error: <err>"
+            if (pathc > 1) {
+                fputs("Error [", stderr);
+                fputs(pathv[i], stderr);
+                fputs("]: ", stderr);
+            } else {
+                fputs("Error: ", stderr);
+            }
+        }
+        char *msg = NULL;
         switch (code) {
         case ERR_INVALID_MAGIC:
-            fputs("Error: Invalid ELF magic bytes\n", stderr);
+            msg = "Invalid ELF magic bytes\n";
             break;
         case ERR_INVALID_CLASS:
-            fputs("Error: Invalid ELF class\n", stderr);
+            msg = "Invalid ELF class\n";
             break;
         case ERR_INVALID_DATA:
-            fputs("Error: Invalid ELF data\n", stderr);
+            msg = "Invalid ELF data\n";
             break;
         case ERR_INVALID_HEADER:
-            fputs("Error: Invalid ELF header\n", stderr);
+            msg = "Invalid ELF header\n";
             break;
         case ERR_INVALID_BITS:
-            fputs("Error: Invalid bits\n", stderr);
+            msg = "Invalid bits\n";
             break;
         case ERR_INVALID_ENDIANNESS:
-            fputs("Error: Invalid endianness\n", stderr);
+            msg = "Invalid endianness\n";
             break;
         case ERR_NO_EXEC_OR_DYN:
-            fputs("Error: Not an ET_EXEC or ET_DYN ELF file\n", stderr);
+            msg = "Not an ET_EXEC or ET_DYN ELF file\n";
             break;
         case ERR_INVALID_PHOFF:
-            fputs("Error: Invalid ELF program header offset\n", stderr);
+            msg = "Invalid ELF program header offset\n";
             break;
         case ERR_INVALID_PROG_HEADER:
-            fputs("Error: Invalid ELF program header\n", stderr);
+            msg = "Invalid ELF program header\n";
             break;
         case ERR_CANT_STAT:
-            fputs("Error: Can't stat file\n", stderr);
+            msg = "Can't stat file\n";
             break;
         case ERR_INVALID_DYNAMIC_SECTION:
-            fputs("Error: Invalid ELF dynamic section\n", stderr);
+            msg = "Invalid ELF dynamic section\n";
             break;
         case ERR_INVALID_DYNAMIC_ARRAY_ENTRY:
-            fputs("Error: Invalid ELF dynamic array entry\n", stderr);
+            msg = "Invalid ELF dynamic array entry\n";
             break;
         case ERR_NO_STRTAB:
-            fputs("Error: No ELF string table found\n", stderr);
+            msg = "No ELF string table found\n";
             break;
         case ERR_INVALID_SONAME:
-            fputs("Error: Can't read DT_SONAME\n", stderr);
+            msg = "Can't read DT_SONAME\n";
             break;
         case ERR_INVALID_RPATH:
-            fputs("Error: Can't read DT_RPATH\n", stderr);
+            msg = "Can't read DT_RPATH\n";
             break;
         case ERR_INVALID_RUNPATH:
-            fputs("Error: Can't read DT_RUNPATH\n", stderr);
+            msg = "Can't read DT_RUNPATH\n";
             break;
         case ERR_INVALID_NEEDED:
-            fputs("Error: Can't read DT_NEEDED\n", stderr);
+            msg = "Can't read DT_NEEDED\n";
             break;
         case ERR_DEPENDENCY_NOT_FOUND:
-            fputs("Error: Not all dependencies were found\n", stderr);
+            msg = "Not all dependencies were found\n";
             break;
         case ERR_NO_PT_LOAD:
-            fputs("Error: No PT_LOAD found in ELF file\n", stderr);
+            msg = "No PT_LOAD found in ELF file\n";
             break;
         case ERR_VADDRS_NOT_ORDERED:
-            fputs("Error: virtual addresses are not ordered\n", stderr);
+            msg = "Virtual addresses are not ordered\n";
             break;
         case ERROR_COULD_NOT_OPEN_FILE:
-            fputs("Error: could not open file\n", stderr);
+            msg = "Could not open file\n";
             break;
         }
+
+        if (msg != NULL)
+            fputs(msg, stderr);
     }
 
     libtree_state_free(s);
