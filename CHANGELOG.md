@@ -1,3 +1,6 @@
+# v3.0.0-rc5
+- Make sure ISA's match
+
 # v3.0.0-rc4
 - Print error messages
 
