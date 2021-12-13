@@ -40,6 +40,6 @@ make # recommended: LDFLAGS=-static
 <summary>Or use the following unsafe quick install instructions</summary>
 
 ```
-curl -Lfs https://raw.githubusercontent.com/haampie/libtree-in-c/master/libtree.c | cc -o libtree -x c - -std=c99 -D_FILE_OFFSET_BITS=64
+curl -Lfs https://raw.githubusercontent.com/haampie/libtree-in-c/master/libtree.c | ${CC:-cc} -o libtree -x c - -std=c99 -D_FILE_OFFSET_BITS=64
 ```
 </details>
