@@ -23,7 +23,7 @@ Use the `--path` or `-p` flags to show paths rather than sonames:
 ## Install
 
 - [Current stable version **v2.0.0**](https://github.com/haampie/libtree/releases/tag/v2.0.0)
-- [Upcoming version **v3.0.0-rc4**](https://github.com/haampie/libtree/releases/tag/v3.0.0-rc4)
+- [Upcoming version **v3.0.0-rc6**](https://github.com/haampie/libtree/releases/tag/v3.0.0-rc6)
 
 
 ## Building from sources
