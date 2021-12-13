@@ -683,7 +683,9 @@ static void print_error(size_t depth, size_t needed_not_found,
         if (s->color)
             fputs(BOLD_RED, stdout);
         fputs(s->string_table.arr + needed_buf_offsets->p[i], stdout);
-        fputs(s->color ? " not found" CLEAR "\n" : " not found\n", stdout);
+        fputs(" not found\n", stdout);
+        if (s->color)
+            fputs(CLEAR, stdout);
     }
 
     // If anything was not found, we print the search paths in order they
@@ -724,8 +726,11 @@ static void print_error(size_t depth, size_t needed_not_found,
         if (s->color)
             fputs(CLEAR, stdout);
     } else {
-        fputs(s->color ? BRIGHT_BLACK " 1. rpath:" CLEAR "\n" : " 1. rpath:\n",
-              stdout);
+        if (s->color)
+            fputs(BRIGHT_BLACK, stdout);
+        fputs(" 1. rpath:\n", stdout);
+        if (s->color)
+            fputs(CLEAR, stdout);
         for (int j = depth; j >= 0; --j) {
             if (s->rpath_offsets[j] != SIZE_MAX) {
                 char num[8];
@@ -744,60 +749,51 @@ static void print_error(size_t depth, size_t needed_not_found,
         }
     }
 
+    // Environment variables
     fputs(indent, stdout);
-    if (s->ld_library_path_offset == SIZE_MAX) {
-        fputs(s->color ? BRIGHT_BLACK " 2. LD_LIBRARY_PATH was not set" CLEAR
-                                      "\n"
-                       : " 2. LD_LIBRARY_PATH was not set\n",
-              stdout);
-    } else {
-        fputs(s->color ? BRIGHT_BLACK " 2. LD_LIBRARY_PATH:" CLEAR "\n"
-                       : " 2. LD_LIBRARY_PATH:\n",
-              stdout);
+    if (s->color)
+        fputs(BRIGHT_BLACK, stdout);
+    fputs(s->ld_library_path_offset == SIZE_MAX
+              ? " 2. LD_LIBRARY_PATH was not set\n"
+              : " 2. LD_LIBRARY_PATH:\n",
+          stdout);
+    if (s->color)
+        fputs(CLEAR, stdout);
+    if (s->ld_library_path_offset != SIZE_MAX)
         print_colon_delimited_paths(
             s->string_table.arr + s->ld_library_path_offset, indent);
-    }
 
+    // runpath
     fputs(indent, stdout);
-    if (runpath == NULL) {
-        fputs(s->color ? BRIGHT_BLACK " 3. runpath was not set" CLEAR "\n"
-                       : " 3. runpath was not set\n",
-              stdout);
-    } else {
-        fputs(s->color ? BRIGHT_BLACK " 3. runpath:" CLEAR "\n"
-                       : " 3. runpath:\n",
-              stdout);
+    if (s->color)
+        fputs(BRIGHT_BLACK, stdout);
+    fputs(runpath == NULL ? " 3. runpath was not set\n" : " 3. runpath:\n",
+          stdout);
+    if (s->color)
+        fputs(CLEAR, stdout);
+    if (runpath != NULL)
         print_colon_delimited_paths(runpath, indent);
-    }
 
     fputs(indent, stdout);
-    if (no_def_lib) {
-        fputs(s->color ? BRIGHT_BLACK
-                  " 4. ld.so.conf not considered due to NODEFLIB flag" CLEAR
-                  "\n"
-                       : " 4. ld.so.conf not considered due to NODEFLIB flag\n",
-              stdout);
-    } else {
-        fputs(s->color ? BRIGHT_BLACK " 4. ld.so.conf:" CLEAR "\n"
-                       : " 4. ld.so.conf:\n",
-              stdout);
-    }
+    if (s->color)
+        fputs(BRIGHT_BLACK, stdout);
+    fputs(no_def_lib ? " 4. ld.so.conf not considered due to NODEFLIB flag\n"
+                     : " 4. ld.so.conf:\n",
+          stdout);
+    if (s->color)
+        fputs(CLEAR, stdout);
     print_colon_delimited_paths(s->string_table.arr + s->ld_so_conf_offset,
                                 indent);
 
     fputs(indent, stdout);
-    if (no_def_lib) {
-        fputs(s->color
-                  ? BRIGHT_BLACK
-                  " 5. Standard paths not considered due to NODEFLIB flag" CLEAR
-                  "\n"
-                  : " 4. Standard paths not considered due to NODEFLIB flag\n",
-              stdout);
-    } else {
-        fputs(s->color ? BRIGHT_BLACK " 5. Standard paths:" CLEAR "\n"
-                       : " 5. Standard paths:\n",
-              stdout);
-    }
+    if (s->color)
+        fputs(BRIGHT_BLACK, stdout);
+    fputs(no_def_lib
+              ? " 5. Standard paths not considered due to NODEFLIB flag\n"
+              : " 5. Standard paths:\n",
+          stdout);
+    if (s->color)
+        fputs(CLEAR, stdout);
     print_colon_delimited_paths(s->string_table.arr + s->default_paths_offset,
                                 indent);
 
