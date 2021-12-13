@@ -1,20 +1,15 @@
-# v3.0.0-rc6
-- Support relative includes in /etc/ld.so.conf
 
-# v3.0.0-rc5
-- Make sure ISA's match
-
-# v3.0.0-rc4
-- Print error messages
-
-# v3.0.0-rc3
-- Fixes more memory issues
-
-# v3.0.0-rc2
+# v3.0.0-rc1 ... v3.0.0-rc7
 - Fixes a memory issue when running libtree on many files
+- Fixes more memory issues
+- Print error messages
+- Make sure ISA's match
+- Support relative includes in /etc/ld.so.conf
+- flush stdout/stderr
+- squash warnings
 
 # v3.0.0-rc1
-- Rewritten in C99 without 0 external dependencies.
+- Rewritten in C99 with 0 external dependencies.
 - Significantly faster & smaller (~50KB statically compiled with musl libc, or
   even smaller than the source file with diet libc).
 - Improved search path printing when libraries cannot be located
