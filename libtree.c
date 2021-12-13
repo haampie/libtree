@@ -1540,6 +1540,7 @@ static int print_tree(int pathc, char **pathv, struct libtree_state_t *s) {
     for (int i = 0; i < pathc; ++i) {
         int code = recurse(pathv[i], 0, s, (struct compat_t){.any = 1},
                            (struct found_t){.how = INPUT});
+        fflush(stdout);
         if (code != 0) {
             exit_code = code;
             fputs("Error [", stderr);
@@ -1618,6 +1619,8 @@ static int print_tree(int pathc, char **pathv, struct libtree_state_t *s) {
 
         if (msg != NULL)
             fputs(msg, stderr);
+
+        fflush(stderr);
     }
 
     libtree_state_free(s);
