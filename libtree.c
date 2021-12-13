@@ -80,6 +80,7 @@
 
 #define SMALL_VEC_SIZE 16
 #define MAX_RECURSION_DEPTH 32
+#define MAX_PATH_LENGTH 4096
 
 // Libraries we do not show by default -- this reduces the verbosity quite a
 // bit.
@@ -328,7 +329,7 @@ static void string_table_store(struct string_table_t *t, char const *str) {
 }
 
 static void string_table_copy_from_file(struct string_table_t *t, FILE *fptr) {
-    char c;
+    int c;
     // TODO: this could be a bit more efficient...
     while ((c = getc(fptr)) != '\0' && c != EOF) {
         string_table_maybe_grow(t, 1);
@@ -417,11 +418,11 @@ static int check_absolute_paths(size_t *needed_not_found,
         }
 
         // Copy the path over.
-        char path[4096];
+        char path[MAX_PATH_LENGTH];
         size_t len = strlen(st->arr + needed_buf_offsets->p[i]);
 
         // Unlikely to happen but good to guard against
-        if (len >= 4096)
+        if (len >= MAX_PATH_LENGTH)
             continue;
 
         // Include \0
@@ -473,8 +474,8 @@ static int check_search_paths(struct found_t reason, size_t offset,
                               size_t depth, struct libtree_state_t *s,
                               struct compat_t compat) {
     int exit_code = 0;
-    char path[4096];
-    char *path_end = path + 4096;
+    char path[MAX_PATH_LENGTH];
+    char *path_end = path + MAX_PATH_LENGTH;
 
     struct string_table_t const *st = &s->string_table;
 
@@ -1199,7 +1200,7 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
     }
 
     // Store the ORIGIN string.
-    char origin[4096];
+    char origin[MAX_PATH_LENGTH];
     char *last_slash = strrchr(current_file, '/');
     if (last_slash != NULL) {
         // Exclude the last slash
@@ -1390,13 +1391,14 @@ static int parse_ld_config_file(struct string_table_t *st, char *path) {
     if (fptr == NULL)
         return 1;
 
-    char c = '0';
-    char line[4096];
+    int c = 0;
+    char line[MAX_PATH_LENGTH];
+    char tmp[MAX_PATH_LENGTH];
 
     while (c != EOF) {
         size_t line_len = 0;
         while ((c = getc(fptr)) != '\n' && c != EOF) {
-            if (line_len < 4095) {
+            if (line_len < MAX_PATH_LENGTH - 1) {
                 line[line_len++] = c;
             }
         }
@@ -1415,7 +1417,6 @@ static int parse_ld_config_file(struct string_table_t *st, char *path) {
             *comment = '\0';
 
         // Remove trailing whitespace
-        // although, whitespace is technically allowed in paths :think:
         while (end != begin)
             if (!isspace(*--end))
                 break;
@@ -1431,17 +1432,28 @@ static int parse_ld_config_file(struct string_table_t *st, char *path) {
         if (strncmp(begin, "include", 7) == 0 && isspace(begin[7])) {
             begin += 8;
             // Remove more whitespace.
-            for (; isspace(*begin); ++begin) {
+            while (isspace(*begin))
+                ++begin;
+
+            // Prepend current dir when include dir is relative.
+            if (*begin != '/') {
+                char *wd = strrchr(path, '/');
+                wd = wd == NULL ? strrchr(path, '\0') : wd;
+
+                // bytes until /
+                size_t wd_len = wd - path;
+                size_t include_len = end - begin + 1;
+
+                // just skip then.
+                if (wd_len + 1 + include_len >= MAX_PATH_LENGTH)
+                    continue;
+
+                memcpy(tmp, path, wd_len);
+                tmp[wd_len] = '/';
+                memcpy(tmp + wd_len + 1, begin, include_len);
+                tmp[wd_len + 1 + include_len] = '\0';
+                begin = tmp;
             }
-
-            // String can't be empty as it was trimmed and
-            // still had whitespace next to include.
-
-            // TODO: check if relative globbing to the
-            // current file is supported or not.
-            // We do *not* support it right now.
-            if (*begin != '/')
-                continue;
 
             ld_conf_globbing(st, begin);
         } else {
