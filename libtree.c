@@ -26,6 +26,9 @@
 #define DT_RPATH 15
 #define DT_RUNPATH 29
 
+#define BITS32 1
+#define BITS64 2
+
 #define ERR_INVALID_MAGIC 11
 #define ERR_INVALID_CLASS 12
 #define ERR_INVALID_DATA 13
@@ -46,7 +49,8 @@
 #define ERR_DEPENDENCY_NOT_FOUND 28
 #define ERR_NO_PT_LOAD 29
 #define ERR_VADDRS_NOT_ORDERED 30
-#define ERROR_COULD_NOT_OPEN_FILE 31
+#define ERR_COULD_NOT_OPEN_FILE 31
+#define ERR_INCOMPATIBLE_ISA 32
 
 #define DT_FLAGS_1 0x6ffffffb
 #define DT_1_NODEFLIB 0x800
@@ -147,7 +151,11 @@ struct dyn_32_t {
     uint32_t d_val;
 };
 
-typedef enum { EITHER, BITS32, BITS64 } elf_bits_t;
+struct compat_t {
+    char any; // 1 iff we don't look for libs matching a certain architecture
+    uint8_t class;    // 32 or 64 bits?
+    uint16_t machine; // instruction set
+};
 
 typedef enum {
     INPUT,
@@ -372,7 +380,7 @@ static void tree_preamble(struct libtree_state_t *s, size_t depth) {
 }
 
 static int recurse(char *current_file, size_t depth,
-                   struct libtree_state_t *state, elf_bits_t bits,
+                   struct libtree_state_t *state, struct compat_t compat,
                    struct found_t reason);
 
 static void apply_exclude_list(size_t *needed_not_found,
@@ -396,7 +404,7 @@ static void apply_exclude_list(size_t *needed_not_found,
 static int check_absolute_paths(size_t *needed_not_found,
                                 struct small_vec_u64_t *needed_buf_offsets,
                                 size_t depth, struct libtree_state_t *s,
-                                elf_bits_t bits) {
+                                struct compat_t compat) {
     int exit_code = 0;
     // First go over absolute paths in needed libs.
     for (size_t i = 0; i < *needed_not_found;) {
@@ -429,7 +437,7 @@ static int check_absolute_paths(size_t *needed_not_found,
             err = " is not absolute";
             exit_code = ERR_DEPENDENCY_NOT_FOUND;
         } else {
-            int code = recurse(path, depth + 1, s, bits,
+            int code = recurse(path, depth + 1, s, compat,
                                (struct found_t){.how = DIRECT});
             if (code == ERR_DEPENDENCY_NOT_FOUND)
                 exit_code = ERR_DEPENDENCY_NOT_FOUND;
@@ -463,7 +471,7 @@ static int check_search_paths(struct found_t reason, size_t offset,
                               size_t *needed_not_found,
                               struct small_vec_u64_t *needed_buf_offsets,
                               size_t depth, struct libtree_state_t *s,
-                              elf_bits_t bits) {
+                              struct compat_t compat) {
     int exit_code = 0;
     char path[4096];
     char *path_end = path + 4096;
@@ -510,7 +518,7 @@ static int check_search_paths(struct found_t reason, size_t offset,
             s->found_all_needed[depth] = *needed_not_found <= 1;
 
             // And try to locate the lib.
-            int code = recurse(path, depth + 1, s, bits, reason);
+            int code = recurse(path, depth + 1, s, compat, reason);
             if (code == ERR_DEPENDENCY_NOT_FOUND)
                 exit_code = ERR_DEPENDENCY_NOT_FOUND;
             if (code == 0 || code == ERR_DEPENDENCY_NOT_FOUND) {
@@ -863,11 +871,11 @@ static void visited_files_append(struct visited_file_array_t *files,
 }
 
 static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
-                   elf_bits_t parent_bits, struct found_t reason) {
+                   struct compat_t compat, struct found_t reason) {
     FILE *fptr = fopen(current_file, "rb");
 
     if (fptr == NULL)
-        return ERROR_COULD_NOT_OPEN_FILE;
+        return ERR_COULD_NOT_OPEN_FILE;
 
     // When we're done recursing, we should give back the memory we've claimed.
     size_t old_buf_size = s->string_table.n;
@@ -887,7 +895,7 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
     }
 
     // Do at least *some* header validation
-    if (e_ident[4] != '\x01' && e_ident[4] != '\x02') {
+    if (e_ident[4] != BITS32 && e_ident[4] != BITS64) {
         fclose(fptr);
         return ERR_INVALID_CLASS;
     }
@@ -897,11 +905,11 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
         return ERR_INVALID_DATA;
     }
 
-    elf_bits_t curr_bits = e_ident[4] == '\x02' ? BITS64 : BITS32;
+    struct compat_t curr_type = {.any = 0, .class = e_ident[4]};
     int is_little_endian = e_ident[5] == '\x01';
 
-    // Make sure that we have matching bits with dependent
-    if (parent_bits != EITHER && parent_bits != curr_bits) {
+    // Make sure that we have matching bits with parent
+    if (!compat.any && compat.class != curr_type.class) {
         fclose(fptr);
         return ERR_INVALID_BITS;
     }
@@ -920,7 +928,7 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
     } header;
 
     // Read the (rest of the) elf header
-    if (curr_bits == BITS64) {
+    if (curr_type.class == BITS64) {
         if (fread(&header.h64, sizeof(struct header_64_t), 1, fptr) != 1) {
             fclose(fptr);
             return ERR_INVALID_HEADER;
@@ -928,6 +936,11 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
         if (header.h64.e_type != ET_EXEC && header.h64.e_type != ET_DYN) {
             fclose(fptr);
             return ERR_NO_EXEC_OR_DYN;
+        }
+        curr_type.machine = header.h64.e_machine;
+        if (!compat.any && compat.machine != curr_type.machine) {
+            fclose(fptr);
+            return ERR_INCOMPATIBLE_ISA;
         }
         if (fseek(fptr, header.h64.e_phoff, SEEK_SET) != 0) {
             fclose(fptr);
@@ -941,6 +954,11 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
         if (header.h32.e_type != ET_EXEC && header.h32.e_type != ET_DYN) {
             fclose(fptr);
             return ERR_NO_EXEC_OR_DYN;
+        }
+        curr_type.machine = header.h32.e_machine;
+        if (!compat.any && compat.machine != curr_type.machine) {
+            fclose(fptr);
+            return ERR_INCOMPATIBLE_ISA;
         }
         if (fseek(fptr, header.h32.e_phoff, SEEK_SET) != 0) {
             fclose(fptr);
@@ -964,7 +982,7 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
 
     // Read the program header.
     uint64_t p_offset = MAX_OFFSET_T;
-    if (curr_bits == BITS64) {
+    if (curr_type.class == BITS64) {
         for (uint64_t i = 0; i < header.h64.e_phnum; ++i) {
             if (fread(&prog.p64, sizeof(struct prog_64_t), 1, fptr) != 1) {
                 fclose(fptr);
@@ -1057,7 +1075,7 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
         uint64_t d_tag;
         uint64_t d_val;
 
-        if (curr_bits == BITS64) {
+        if (curr_type.class == BITS64) {
             struct dyn_64_t dyn;
             if (fread(&dyn, sizeof(struct dyn_64_t), 1, fptr) != 1) {
                 fclose(fptr);
@@ -1275,7 +1293,7 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
 
     if (needed_not_found)
         exit_code |= check_absolute_paths(
-            &needed_not_found, &needed_buf_offsets, depth, s, curr_bits);
+            &needed_not_found, &needed_buf_offsets, depth, s, curr_type);
 
     // Consider rpaths only when runpath is empty
     if (runpath == MAX_OFFSET_T) {
@@ -1287,7 +1305,7 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
 
             exit_code |= check_search_paths(
                 (struct found_t){.how = RPATH, .depth = j}, s->rpath_offsets[j],
-                &needed_not_found, &needed_buf_offsets, depth, s, curr_bits);
+                &needed_not_found, &needed_buf_offsets, depth, s, curr_type);
         }
     }
 
@@ -1295,28 +1313,28 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
     if (needed_not_found && s->ld_library_path_offset != SIZE_MAX) {
         exit_code |= check_search_paths(
             (struct found_t){.how = LD_LIBRARY_PATH}, s->ld_library_path_offset,
-            &needed_not_found, &needed_buf_offsets, depth, s, curr_bits);
+            &needed_not_found, &needed_buf_offsets, depth, s, curr_type);
     }
 
     // Then consider runpaths
     if (needed_not_found && runpath != MAX_OFFSET_T) {
         exit_code |= check_search_paths(
             (struct found_t){.how = RUNPATH}, runpath_buf_offset,
-            &needed_not_found, &needed_buf_offsets, depth, s, curr_bits);
+            &needed_not_found, &needed_buf_offsets, depth, s, curr_type);
     }
 
     // Check ld.so.conf paths
     if (needed_not_found && !no_def_lib) {
         exit_code |= check_search_paths(
             (struct found_t){.how = LD_SO_CONF}, s->ld_so_conf_offset,
-            &needed_not_found, &needed_buf_offsets, depth, s, curr_bits);
+            &needed_not_found, &needed_buf_offsets, depth, s, curr_type);
     }
 
     // Then consider standard paths
     if (needed_not_found && !no_def_lib) {
         exit_code |= check_search_paths(
             (struct found_t){.how = DEFAULT}, s->default_paths_offset,
-            &needed_not_found, &needed_buf_offsets, depth, s, curr_bits);
+            &needed_not_found, &needed_buf_offsets, depth, s, curr_type);
     }
 
     // Finally summarize those that could not be found.
@@ -1509,8 +1527,8 @@ static int print_tree(int pathc, char **pathv, struct libtree_state_t *s) {
     int exit_code = 0;
 
     for (int i = 0; i < pathc; ++i) {
-        int code =
-            recurse(pathv[i], 0, s, EITHER, (struct found_t){.how = INPUT});
+        int code = recurse(pathv[i], 0, s, (struct compat_t){.any = 1},
+                           (struct found_t){.how = INPUT});
         if (code != 0) {
             exit_code = code;
             fputs("Error [", stderr);
@@ -1579,8 +1597,11 @@ static int print_tree(int pathc, char **pathv, struct libtree_state_t *s) {
         case ERR_VADDRS_NOT_ORDERED:
             msg = "Virtual addresses are not ordered\n";
             break;
-        case ERROR_COULD_NOT_OPEN_FILE:
+        case ERR_COULD_NOT_OPEN_FILE:
             msg = "Could not open file\n";
+            break;
+        case ERR_INCOMPATIBLE_ISA:
+            msg = "Incompatible ISA\n";
             break;
         }
 
