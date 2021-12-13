@@ -23,7 +23,7 @@ Use the `--path` or `-p` flags to show paths rather than sonames:
 ## Install
 
 - [Current stable version **v2.0.0**](https://github.com/haampie/libtree/releases/tag/v2.0.0)
-- [Upcoming version **v3.0.0-rc6**](https://github.com/haampie/libtree/releases/tag/v3.0.0-rc6)
+- [Upcoming version **v3.0.0-rc7**](https://github.com/haampie/libtree/releases/tag/v3.0.0-rc6)
   | arch    | sha256sum |
   |---------|-----------|
   | [aarch64 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.0-rc7/libtree_aarch64) | `087226c69472a1cab61f38b78a157a6441e1ae859bae20c2d91977695e38b042` |
