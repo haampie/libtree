@@ -743,7 +743,7 @@ static void print_error(size_t depth, size_t needed_not_found,
     char *indent = malloc(sizeof(LIGHT_VERTICAL_WITH_INDENT) * depth +
                           strlen(box_vertical) + 1);
     char *p = indent;
-    for (int i = 0; i < depth; ++i) {
+    for (size_t i = 0; i < depth; ++i) {
         if (s->found_all_needed[i]) {
             int len = sizeof(JUST_INDENT) - 1;
             memcpy(p, JUST_INDENT, len);
@@ -1488,9 +1488,8 @@ static void parse_ld_so_conf(struct libtree_state_t *s) {
 }
 
 static void parse_ld_library_path(struct libtree_state_t *s) {
-    char *LD_LIBRARY_PATH = "LD_LIBRARY_PATH";
     s->ld_library_path_offset = SIZE_MAX;
-    char *val = getenv(LD_LIBRARY_PATH);
+    char *val = getenv("LD_LIBRARY_PATH");
 
     // not set, so nothing to do.
     if (val == NULL)
