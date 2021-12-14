@@ -8,6 +8,7 @@
 - Flush stdout/stderr
 - Squash warnings
 - Bring back `--ldconf` for Gentoo Prefix support
+- Bring back man pages
 
 # v3.0.0-rc1
 - Rewritten in C99 with 0 external dependencies.
