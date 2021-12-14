@@ -1,0 +1,46 @@
+.\" Process this file with
+.\" groff -man -Tascii foo.1
+.\"
+.TH libtree 1 "2020-04-13" Linux "User Manuals"
+.SH NAME
+libtree \- print shared object dependencies as a tree
+.SH SYNOPSIS
+.B libtree 
+[
+.I option
+]... [--] [
+.I file
+]...
+.SH DESCRIPTION
+.B libtree
+prints the shared libraries required by each program or shared library on the command line as a tree. By default certain common system libraries are hidden to prune the tree.
+.SH OPTIONS
+.IP "-h, --help"
+Print usage
+.IP "--version"
+Print version info
+.IP "-p, --path"
+Show the path of libraries instead of their 
+.B soname
+.IP "-v"
+Show libraries skipped by default
+.IP "-vv"
+Show dependencies of libraries skipped by default
+.IP "-vvv"
+Show dependencies of already encountered libraries
+.IP "--ldconf arg"
+Path to custom
+.I ld.so.conf
+or
+.I ld-elf.so.conf
+file
+.IP "--"
+All arguments after '--' are interpreted as paths, not flags.
+.SH ENVIRONMENT
+.B LD_LIBRARY_PATH
+can be used to provide additional search paths.
+.SH AUTHOR
+Harmen Stoppels <me@harmenstoppels.nl>
+.SH "SEE ALSO"
+.BR ldd (1)
+
