@@ -704,7 +704,11 @@ static void print_line(size_t depth, char *name, char *color_bold,
         fputs("[runpath]", stdout);
         break;
     case LD_SO_CONF:
-        fputs("[ld.so.conf]", stdout);
+        putchar('[');
+        char *conf_name = strrchr(s->ld_conf_file, '/');
+        conf_name = conf_name == NULL ? s->ld_conf_file : conf_name + 1;
+        fputs(conf_name, stdout);
+        putchar(']');
         break;
     case DIRECT:
         fputs("[direct]", stdout);
@@ -825,8 +829,9 @@ static void print_error(size_t depth, size_t needed_not_found,
     fputs(indent, stdout);
     if (s->color)
         fputs(BRIGHT_BLACK, stdout);
-    fputs(no_def_lib ? " 4. ld.so.conf not considered due to NODEFLIB flag\n"
-                     : " 4. ld.so.conf:\n",
+    fputs(no_def_lib
+              ? " 4. ld config files not considered due to NODEFLIB flag\n"
+              : " 4. ld config files:\n",
           stdout);
     if (s->color)
         fputs(CLEAR, stdout);
