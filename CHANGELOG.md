@@ -1,12 +1,13 @@
 
-# v3.0.0-rc1 ... v3.0.0-rc7
+# v3.0.0-rc1 ... v3.0.0-rc8
 - Fixes a memory issue when running libtree on many files
 - Fixes more memory issues
 - Print error messages
 - Make sure ISA's match
 - Support relative includes in /etc/ld.so.conf
-- flush stdout/stderr
-- squash warnings
+- Flush stdout/stderr
+- Squash warnings
+- Bring back `--ldconf` for Gentoo Prefix support
 
 # v3.0.0-rc1
 - Rewritten in C99 with 0 external dependencies.
