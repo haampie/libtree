@@ -8,6 +8,7 @@ LIBTREE_DEFINES := -D_FILE_OFFSET_BITS=64
 
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
+SHAREDIR ?= $(PREFIX)/share
 
 .PHONY: all check install clean
 
@@ -27,6 +28,8 @@ check: libtree
 install: all
 	mkdir -p $(DESTDIR)$(BINDIR)
 	cp libtree $(DESTDIR)$(BINDIR)
+	mkdir -p $(DESTDIR)$(SHAREDIR)/man1
+	cp doc/libtree.1 $(DESTDIR)$(SHAREDIR)/man1
 
 clean:
 	rm -f *.o libtree
