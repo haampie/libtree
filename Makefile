@@ -28,8 +28,8 @@ check: libtree
 install: all
 	mkdir -p $(DESTDIR)$(BINDIR)
 	cp libtree $(DESTDIR)$(BINDIR)
-	mkdir -p $(DESTDIR)$(SHAREDIR)/man1
-	cp doc/libtree.1 $(DESTDIR)$(SHAREDIR)/man1
+	mkdir -p $(DESTDIR)$(SHAREDIR)/man/man1
+	cp doc/libtree.1 $(DESTDIR)$(SHAREDIR)/man/man1
 
 clean:
 	rm -f *.o libtree
