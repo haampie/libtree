@@ -198,6 +198,7 @@ struct libtree_state_t {
     int verbosity;
     int path;
     int color;
+    char *ld_conf_file;
 
     struct string_table_t string_table;
     struct visited_file_array_t visited;
@@ -1473,10 +1474,7 @@ static void parse_ld_so_conf(struct libtree_state_t *s) {
     s->ld_so_conf_offset = st->n;
 
     // Linux / glibc
-    parse_ld_config_file(st, "/etc/ld.so.conf");
-
-    // FreeBSD
-    parse_ld_config_file(st, "/etc/ld-elf.so.conf");
+    parse_ld_config_file(st, s->ld_conf_file);
 
     // Replace the last semicolon with a '\0'
     // if we have a nonzero number of paths.
@@ -1648,6 +1646,10 @@ int main(int argc, char **argv) {
     s.PLATFORM = uname_val.machine;
     s.OSNAME = uname_val.sysname;
     s.OSREL = uname_val.release;
+    s.ld_conf_file = "/etc/ld.so.conf";
+
+    if (strcmp(uname_val.sysname, "FreeBSD") == 0)
+        s.ld_conf_file = "/etc/ld-elf.so.conf";
 
     // TODO: how to find this value at runtime?
     s.LIB = "lib";
@@ -1688,6 +1690,13 @@ int main(int argc, char **argv) {
                 ++s.verbosity;
             } else if (strcmp(arg, "help") == 0) {
                 opt_help = 1;
+            } else if (strcmp(arg, "ldconf") == 0) {
+                // Require a value
+                if (i + 1 == argc) {
+                    fputs("Expected value after `--ldconf`\n", stderr);
+                    return 1;
+                }
+                s.ld_conf_file = argv[++i];
             } else {
                 fputs("Unrecognized flag `--", stderr);
                 fputs(arg, stderr);
@@ -1735,10 +1744,13 @@ int main(int argc, char **argv) {
               "  libtree -- -.so\n"
               "\n"
               "Locating libs options:\n"
-              "  -p, --path     Show the path of libraries instead of the soname\n"
-              "  -v             Show libraries skipped by default*\n"
-              "  -vv            Show dependencies of libraries skipped by default*\n"
-              "  -vvv           Show dependencies of already encountered libraries\n"
+              "  -p, --path       Show the path of libraries instead of the soname\n"
+              "  -v               Show libraries skipped by default*\n"
+              "  -vv              Show dependencies of libraries skipped by default*\n"
+              "  -vvv             Show dependencies of already encountered libraries\n"
+              "  --ldconf <path>  Config file for extra search paths [", stdout);
+        fputs(s.ld_conf_file, stdout);
+        fputs("]\n"
               "\n"
               "* For brevity, the following libraries are not shown by default:\n"
               "  ",
