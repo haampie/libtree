@@ -1,5 +1,5 @@
 
-# v3.0.0-rc1 ... v3.0.0-rc8
+# v3.0.0-rc1 ... v3.0.0-rc9
 - Fixes a memory issue when running libtree on many files
 - Fixes more memory issues
 - Print error messages
