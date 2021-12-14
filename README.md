@@ -23,14 +23,14 @@ Use the `--path` or `-p` flags to show paths rather than sonames:
 ## Install
 
 - [Current stable version **v2.0.0**](https://github.com/haampie/libtree/releases/tag/v2.0.0)
-- [Upcoming version **v3.0.0-rc8**](https://github.com/haampie/libtree/releases/tag/v3.0.0-rc8)
+- [Upcoming version **v3.0.0-rc9**](https://github.com/haampie/libtree/releases/tag/v3.0.0-rc9)
   | arch    | sha256sum |
   |---------|-----------|
-  | [aarch64 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.0-rc8/libtree_aarch64) | `adf18be6f46da010c5a2c1eadda9341df9d7d63dedd2d005b494b16167e86167` |
-  | [armv6l (linux)](https://github.com/haampie/libtree/releases/download/v3.0.0-rc8/libtree_armv6l) | `782ae0a8bc5bea27356525c76d3ac6b4e65677c2d6d36616486e8cf3bb5a5912` |
-  | [armv7l (linux)](https://github.com/haampie/libtree/releases/download/v3.0.0-rc8/libtree_armv7l) | `8d3b91985af1babe080d53f8e74cefaf47ff6f58e29abd3ea8f03c7680bf0127` |
-  | [i686 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.0-rc8/libtree_i686) | `b54aaa59f2c54df08444ab09c61acd10f22ca4f6dcb29de775a0b498958225a0` |
-  | [x86_64 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.0-rc8/libtree_x86_64) | `4524da05b0921f7315ef3b2380e14567b5177a0c9dcbe0aaf889eab834ccf439` | 
+  | [aarch64 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.0-rc8/libtree_aarch64) | `30ba3ce5c8bfb163ee0bdd225fd777a21f067d1733b71eb4ae61c13a4b3d176a` |
+  | [armv6l (linux)](https://github.com/haampie/libtree/releases/download/v3.0.0-rc9/libtree_armv6l) | `73ab358521a0b6c07fd6b8b76864666991876a7f74941bb059987d0dd2d7ff00` |
+  | [armv7l (linux)](https://github.com/haampie/libtree/releases/download/v3.0.0-rc9/libtree_armv7l) | `7c9deb8c056f98a0892c15f30220b2f251d9283bfa3d3e2e3f669de23a7641a5` |
+  | [i686 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.0-rc9/libtree_i686) | `fddcecf94caa5ae9297b0ea6e1671e330433f121cd6befb9fce0886b4dad422e` |
+  | [x86_64 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.0-rc9/libtree_x86_64) | `48852e3111016551d12015b326e4dbc841c25539770196e2bb8b308a41fa27db` | 
 
 ## Building from sources
 
