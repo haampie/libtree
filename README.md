@@ -22,14 +22,14 @@ Use the `--path` or `-p` flags to show paths rather than sonames:
 
 ## Install
 
-- [Latest version **v3.0.0**](https://github.com/haampie/libtree/releases/tag/v3.0.0)
+- [Latest version **v3.0.1**](https://github.com/haampie/libtree/releases/tag/v3.0.1)
   | arch    | sha256sum |
   |---------|-----------|
-  | [aarch64 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.0/libtree_aarch64) | `50262cce5523ed0e19e38d563e9eacf69aa4921e01cd9735d96d05d0c1fc3018` |
-  | [armv6l (linux)](https://github.com/haampie/libtree/releases/download/v3.0.0/libtree_armv6l) | `2341ff61152056b3f72776983d27ee8620c61e5f5476454a40ab909cfbcbcc85` |
-  | [armv7l (linux)](https://github.com/haampie/libtree/releases/download/v3.0.0/libtree_armv7l) | `f3801b197a3ea192697a13d62cb653d5603a68f34cd9350d8ea717184614dde0` |
-  | [i686 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.0/libtree_i686) | `28c080c70715a3c1b5354e8de04f6edeb3fd9e6e840c9de7bd28ef2f23b3b16b` |
-  | [x86_64 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.0/libtree_x86_64) | `6acee10fd0a9bf18f71f5cb9cc1a41309e063d7eb682f8425355d1346f8c5a13` | 
+  | [aarch64 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.1/libtree_aarch64) | `671a7ab57a068d5106595680389dd17c632c5eeb0b54bef4e3d22e1565f5676e` |
+  | [armv6l (linux)](https://github.com/haampie/libtree/releases/download/v3.0.1/libtree_armv6l) | `a28c1c2bbd3e3d28c8788fff5ff8494e2131701fbdec2aab59b9154b9e90eb7f` |
+  | [armv7l (linux)](https://github.com/haampie/libtree/releases/download/v3.0.1/libtree_armv7l) | `c1fa914db49f1b794579a95a483c09fb3aea5a9630cb8535af03b9d292cda379` |
+  | [i686 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.1/libtree_i686) | `57009c08c50fe290dff135e8444972fe6b86a2839fb8bd6d79975829a7a0a257` |
+  | [x86_64 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.1/libtree_x86_64) | `64b573b5cfadd584c2467bfa50614c78100a83088698ba96b034b17347f4bb28` | 
 - [Older release **v2.0.0**](https://github.com/haampie/libtree/releases/tag/v2.0.0)
 
 
