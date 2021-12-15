@@ -85,8 +85,10 @@
 // Libraries we do not show by default -- this reduces the verbosity quite a
 // bit.
 char const *exclude_list[] = {
-    "libc.so",      "libpthread.so",      "libm.so",  "libgcc_s.so",
-    "libstdc++.so", "ld-linux-x86-64.so", "libdl.so", "libc.musl-x86_64.so"};
+    "libc.so",     "libpthread.so",       "libm.so",
+    "libgcc_s.so", "libstdc++.so",        "ld-linux-x86-64.so",
+    "libdl.so",    "libc.musl-x86_64.so", "ld-linux.so",
+    "ld64.so",     "ld-linux-aarch64.so"};
 
 struct header_64_t {
     uint16_t e_type;
