@@ -1,3 +1,7 @@
+# v3.0.1
+- Fix man pages directory in `make install`
+- Skip dynamic linker on aarch64 and powerpc
+
 # v3.0.0
 - Rewritten in C99 with 0 external dependencies.
 - Significantly faster & smaller (~50KB statically compiled with musl libc, or
