@@ -20,10 +20,7 @@ all: libtree
 libtree: libtree.o
 	$(CC) $(LDFLAGS) $^ -o $@
 
-check: libtree
-	for dir in $(sort $(wildcard tests/*)); do \
-		$(MAKE) -C $$dir check; \
-	done
+check:: libtree
 
 install: all
 	mkdir -p $(DESTDIR)$(BINDIR)
@@ -31,5 +28,10 @@ install: all
 	mkdir -p $(DESTDIR)$(SHAREDIR)/man/man1
 	cp doc/libtree.1 $(DESTDIR)$(SHAREDIR)/man/man1
 
-clean:
+clean::
 	rm -f *.o libtree
+
+clean check::
+	for dir in $(sort $(wildcard tests/*)); do \
+		$(MAKE) -C $$dir $@; \
+	done
