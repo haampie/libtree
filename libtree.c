@@ -421,8 +421,9 @@ static size_t prepend_sysroot(char *path, size_t n,
     size_t len_sysroot = strlen(s->sysroot);
 
     // Should we add a `/` beteween sysroot and path?
-    int add_separator = (len_sysroot == 0 || s->sysroot[0] != '/') &&
-                        (n == 0 || path[0] != '/');
+    int add_separator =
+        (len_sysroot == 0 || s->sysroot[len_sysroot - 1] != '/') &&
+        (n == 0 || path[0] != '/');
 
     // Total length excluding \0
     size_t total_len = len_sysroot + add_separator + n;
