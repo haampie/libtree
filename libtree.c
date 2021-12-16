@@ -210,6 +210,7 @@ struct libtree_state_t {
     int path;
     int color;
     char *ld_conf_file;
+    char *sysroot;
 
     struct string_table_t string_table;
     struct visited_file_array_t visited;
@@ -249,7 +250,7 @@ struct small_vec_u64_t {
     size_t capacity;
 };
 
-static inline void utoa(char *str, size_t v) {
+static void utoa(char *str, size_t v) {
     char *p = str;
     do {
         *p++ = '0' + (v % 10);
@@ -264,7 +265,7 @@ static inline void utoa(char *str, size_t v) {
     str[len] = '\0';
 }
 
-static inline void small_vec_u64_init(struct small_vec_u64_t *v) {
+static void small_vec_u64_init(struct small_vec_u64_t *v) {
     memset(v, 0, sizeof(*v));
     v->p = v->buf;
 }
@@ -305,7 +306,7 @@ static void small_vec_u64_free(struct small_vec_u64_t *v) {
  * end of small_vec_u64_t
  */
 
-static inline int host_is_little_endian() {
+static int host_is_little_endian() {
     int test = 1;
     char *bytes = (char *)&test;
     return bytes[0] == 1;
@@ -414,6 +415,37 @@ static void apply_exclude_list(size_t *needed_not_found,
     }
 }
 
+static size_t prepend_sysroot(char *path, size_t n,
+                              struct libtree_state_t const *s) {
+    char tmp[MAX_PATH_LENGTH];
+    size_t len_sysroot = strlen(s->sysroot);
+
+    // Should we add a `/` beteween sysroot and path?
+    int add_separator = (len_sysroot == 0 || s->sysroot[0] != '/') &&
+                        (n == 0 || path[0] != '/');
+
+    // Total length excluding \0
+    size_t total_len = len_sysroot + add_separator + n;
+
+    if (total_len > MAX_PATH_LENGTH)
+        return total_len;
+
+    // Without null
+    memcpy(tmp, s->sysroot, len_sysroot);
+
+    // Add a / to be sure.
+    if (add_separator)
+        tmp[len_sysroot] = '/';
+
+    // Re-root the path
+    memcpy(tmp + len_sysroot + add_separator, path, n);
+
+    // Copy back to original buffer
+    memcpy(path, tmp, total_len);
+
+    return total_len;
+}
+
 static int check_absolute_paths(size_t *needed_not_found,
                                 struct small_vec_u64_t *needed_buf_offsets,
                                 size_t depth, struct libtree_state_t *s,
@@ -450,6 +482,10 @@ static int check_absolute_paths(size_t *needed_not_found,
             err = " is not absolute";
             exit_code = ERR_DEPENDENCY_NOT_FOUND;
         } else {
+            // Prepend to the path (already includes null).
+            if (prepend_sysroot(path, len, s) > MAX_PATH_LENGTH)
+                continue;
+
             int code = recurse(path, depth + 1, s, compat,
                                (struct found_t){.how = DIRECT});
             if (code == ERR_DEPENDENCY_NOT_FOUND)
@@ -516,6 +552,10 @@ static int check_search_paths(struct found_t reason, size_t offset,
 
         // Keep track of the end of the current search path.
         char *search_path_end = dest;
+
+        // Prepend the sysroot if required.
+        if (s->sysroot)
+            search_path_end = path + prepend_sysroot(path, dest - path, s);
 
         // Try to open it -- if we've found anything, swap it with the back.
         for (size_t i = 0; i < *needed_not_found;) {
@@ -1713,6 +1753,12 @@ int main(int argc, char **argv) {
                     return 1;
                 }
                 s.ld_conf_file = argv[++i];
+            } else if (strcmp(arg, "sysroot") == 0) {
+                if (i + 1 == argc) {
+                    fputs("Expected value after `--sysroot`\n", stderr);
+                    return 1;
+                }
+                s.sysroot = argv[++i];
             } else {
                 fputs("Unrecognized flag `--", stderr);
                 fputs(arg, stderr);
