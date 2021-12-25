@@ -24,9 +24,9 @@ check:: libtree
 
 install: all
 	mkdir -p $(DESTDIR)$(BINDIR)
-	cp libtree $(DESTDIR)$(BINDIR)
+	cp -p libtree $(DESTDIR)$(BINDIR)
 	mkdir -p $(DESTDIR)$(SHAREDIR)/man/man1
-	cp doc/libtree.1 $(DESTDIR)$(SHAREDIR)/man/man1
+	cp -p doc/libtree.1 $(DESTDIR)$(SHAREDIR)/man/man1
 
 clean::
 	rm -f *.o libtree
