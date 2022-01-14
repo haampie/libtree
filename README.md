@@ -27,7 +27,6 @@ Use the `--path` or `-p` flags to show paths rather than sonames:
   | arch    | sha256sum |
   |---------|-----------|
   | [aarch64 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.2/libtree_aarch64) | `7c101b43bec7d0caa2370b9bf3e827a9366b3c17a030fd80c4353f8f58111f17` |
-  | [aarch64 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.2/libtree_aarch64) | `7c101b43bec7d0caa2370b9bf3e827a9366b3c17a030fd80c4353f8f58111f17` |
   | [armv6l (linux)](https://github.com/haampie/libtree/releases/download/v3.0.2/libtree_armv6l) | `c5a844cd128a588c26004601881e381cf3292676bfba63deba00e0b3e46da693` |
   | [armv7l (linux)](https://github.com/haampie/libtree/releases/download/v3.0.2/libtree_armv7l) | `cebfef92f5cfdfacbb878982a0d444d6b2cf9479b90e9aede4165be72d1692b2` |
   | [i686 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.2/libtree_i686) | `bb314da7a27e57424af55218506e8f48359176fa994db4fea00b9794e4083ac8` |
