@@ -21,8 +21,8 @@ exe_b: some_dir/lib_f.so lib_g.so lib_without_soname.so
 	echo 'extern int i(); extern int f(); extern int g(); int main(){return f() + g() + i();}' | $(CC) -Wl,--no-as-needed "-Wl,-rpath,$(CURDIR)/" "-Wl,-rpath,$(CURDIR)/some_dir" -L. -L./some_dir -l_f -l_g $(CURDIR)/lib_without_soname.so -o $@ -x c -
 
 check: exe_a exe_b
-	../../libtree exe_a  # cannot find lib_f.so
-	../../libtree exe_b  # should find lib_f.so
+	../../libtree exe_a || true # cannot find lib_f.so
+	../../libtree exe_b || true # should find lib_f.so
 
 clean:
 	rm -rf *.so some_dir exe*
