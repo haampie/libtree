@@ -5,12 +5,12 @@ on: push
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@ec3a7ce113134d7a93b817d10a8272cb61118579
 
     - name: build
       run: make
-    
+
     - name: test
-      run: make -i check # notice: verification is not fully automated
+      run: make check
