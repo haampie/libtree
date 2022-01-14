@@ -1,3 +1,8 @@
+# v3.0.2
+- Improve `make check`, `make clean` and CI
+- Preserve original timestamps when installing files
+- Add rpath order test
+
 # v3.0.1
 - Fix man pages directory in `make install`
 - Skip dynamic linker on aarch64 and powerpc
