@@ -30,8 +30,8 @@ exe_b: lib_defaultlib.so
 	echo 'extern int g(); int main(){return g();}' | $(CC) -z nodefaultlib -o $@ -Wl,--disable-new-dtags '-Wl,-rpath,$$ORIGIN' -x c - -L. -l_defaultlib
 
 check: exe_a exe_b
-	../../libtree -vvv exe_a  # should likely not find libc
-	../../libtree -vvv exe_b  # should likely not find libc
+	../../libtree -vvv exe_a || true # should likely not find libc
+	../../libtree -vvv exe_b || true # should likely not find libc
 
 clean:
 	rm -f *.so exe*
