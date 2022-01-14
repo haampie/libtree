@@ -33,5 +33,5 @@ clean::
 
 clean check::
 	for dir in $(sort $(wildcard tests/*)); do \
-		$(MAKE) -C $$dir $@; \
+		$(MAKE) -C $$dir $@ || break ;\
 	done
