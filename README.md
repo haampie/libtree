@@ -22,8 +22,7 @@ Use the `--path` or `-p` flags to show paths rather than sonames:
 
 ## Install
 
-- [Latest version **v3.0.2**](https://github.com/haampie/libtree/releases/tag/v3.0.2)
-- Prebuilt binaries
+- [Prebuilt binaries for **v3.0.2**](https://github.com/haampie/libtree/releases/tag/v3.0.2)
   | arch    | sha256sum |
   |---------|-----------|
   | [aarch64 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.2/libtree_aarch64) | `7c101b43bec7d0caa2370b9bf3e827a9366b3c17a030fd80c4353f8f58111f17` |
@@ -32,12 +31,10 @@ Use the `--path` or `-p` flags to show paths rather than sonames:
   | [i686 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.2/libtree_i686) | `bb314da7a27e57424af55218506e8f48359176fa994db4fea00b9794e4083ac8` |
   | [x86_64 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.2/libtree_x86_64) | `9f29b7f0a737034114bb13c8779b743d838616d517cd8a2bae54565e9b4d1f7e` | 
 - Fedora / RHEL / CentOS
-```
-# dnf install libtree-ldd
-
-For RHEL and derivatives enbale EPEL first
-# dnf install epel-release
-```
+  ```console
+  $ dnf install epel-release # For RHEL and derivatives enable EPEL first 
+  $ dnf install libtree-ldd  
+  ```
 - [Older release **v2.0.0**](https://github.com/haampie/libtree/releases/tag/v2.0.0)
 
 
