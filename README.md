@@ -33,7 +33,11 @@ Use the `--path` or `-p` flags to show paths rather than sonames:
 - Fedora / RHEL / CentOS
   ```console
   $ dnf install epel-release # For RHEL and derivatives enable EPEL first 
-  $ dnf install libtree-ldd  
+  $ dnf install libtree-ldd
+  ```
+- Ubuntu 22.04+
+  ```console
+  apt-get install libtree
   ```
 - [Older release **v2.0.0**](https://github.com/haampie/libtree/releases/tag/v2.0.0)
 
