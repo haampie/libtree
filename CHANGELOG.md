@@ -1,3 +1,6 @@
+# v3.0.3
+- `libtree -vvvv...` is now treated as `libtree -vvv`.
+
 # v3.0.2
 - Improve `make check`, `make clean` and CI
 - Preserve original timestamps when installing files
