@@ -1199,7 +1199,7 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
         depth < MAX_RECURSION_DEPTH &&
         ((!seen_before && !in_exclude_list) ||
          (!seen_before && in_exclude_list && s->verbosity >= 2) ||
-         s->verbosity == 3);
+         s->verbosity >= 3);
 
     // Just print the library and return
     if (!should_recurse) {
