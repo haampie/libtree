@@ -22,14 +22,14 @@ Use the `--path` or `-p` flags to show paths rather than sonames:
 
 ## Install
 
-- [Prebuilt binaries for **v3.0.2**](https://github.com/haampie/libtree/releases/tag/v3.0.2)
+- [Prebuilt binaries for **v3.0.3**](https://github.com/haampie/libtree/releases/tag/v3.0.3)
   | arch    | sha256sum |
   |---------|-----------|
-  | [aarch64 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.2/libtree_aarch64) | `7c101b43bec7d0caa2370b9bf3e827a9366b3c17a030fd80c4353f8f58111f17` |
-  | [armv6l (linux)](https://github.com/haampie/libtree/releases/download/v3.0.2/libtree_armv6l) | `c5a844cd128a588c26004601881e381cf3292676bfba63deba00e0b3e46da693` |
-  | [armv7l (linux)](https://github.com/haampie/libtree/releases/download/v3.0.2/libtree_armv7l) | `cebfef92f5cfdfacbb878982a0d444d6b2cf9479b90e9aede4165be72d1692b2` |
-  | [i686 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.2/libtree_i686) | `bb314da7a27e57424af55218506e8f48359176fa994db4fea00b9794e4083ac8` |
-  | [x86_64 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.2/libtree_x86_64) | `9f29b7f0a737034114bb13c8779b743d838616d517cd8a2bae54565e9b4d1f7e` | 
+  | [aarch64 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.3/libtree_aarch64) | `6f5945b6fc2c7f82564f045054dbd04362567397f6ed6c816f161afd41067c21` |
+  | [armv6l (linux)](https://github.com/haampie/libtree/releases/download/v3.0.3/libtree_armv6l) | `aed70facf4987f6e320bd88fbd0d5be2b7453e485ac3eb8e365011f588761bfd` |
+  | [armv7l (linux)](https://github.com/haampie/libtree/releases/download/v3.0.3/libtree_armv7l) | `932284ce9897365f0623f4c802407aade63a8c6fd5cba523d20d77d683768fae` |
+  | [i686 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.3/libtree_i686) | `9e451ff5bd5dd229b65c48354d7136a54816da527308189ed045cea40a552c82` |
+  | [x86_64 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.3/libtree_x86_64) | `22ec893cc34892f88f25e42ba898314a480c7ab8456dcad2bdc1809e0e9d68b0` |
 - Fedora / RHEL / CentOS
   ```console
   $ dnf install epel-release # For RHEL and derivatives enable EPEL first 
