@@ -10,7 +10,7 @@
 #include <sys/utsname.h>
 #include <unistd.h>
 
-#define VERSION "3.0.2"
+#define VERSION "3.0.3-dev"
 
 #define ET_EXEC 2
 #define ET_DYN 3
