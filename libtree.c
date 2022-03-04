@@ -1197,7 +1197,7 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
 
     // No need to recurse deeper when we aren't in very verbose mode.
     int should_recurse =
-        depth < MAX_RECURSION_DEPTH && depth < s->max_depth &&
+        depth < s->max_depth &&
         ((!seen_before && !in_exclude_list) ||
          (!seen_before && in_exclude_list && s->verbosity >= 2) ||
          s->verbosity >= 3);
@@ -1727,8 +1727,11 @@ int main(int argc, char **argv) {
                     fputs("Expected value after `--max-depth`\n", stderr);
                     return 1;
                 }
+                // Limit it by MAX_RECURSION_DEPTH.
                 char *ptr;
                 s.max_depth = strtoul(argv[++i], &ptr, 10);
+                if (s.max_depth > MAX_RECURSION_DEPTH)
+                    s.max_depth = MAX_RECURSION_DEPTH;
             } else {
                 fputs("Unrecognized flag `--", stderr);
                 fputs(arg, stderr);
