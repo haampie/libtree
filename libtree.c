@@ -210,6 +210,7 @@ struct libtree_state_t {
     int path;
     int color;
     char *ld_conf_file;
+    unsigned long max_depth;
 
     struct string_table_t string_table;
     struct visited_file_array_t visited;
@@ -1196,7 +1197,7 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
 
     // No need to recurse deeper when we aren't in very verbose mode.
     int should_recurse =
-        depth < MAX_RECURSION_DEPTH &&
+        depth < MAX_RECURSION_DEPTH && depth < s->max_depth &&
         ((!seen_before && !in_exclude_list) ||
          (!seen_before && in_exclude_list && s->verbosity >= 2) ||
          s->verbosity >= 3);
@@ -1206,9 +1207,15 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
         char *print_name = soname != MAX_OFFSET_T && !s->path
                                ? s->string_table.arr + soname_buf_offset
                                : current_file;
-        char *bold_color = in_exclude_list ? REGULAR_MAGENTA : REGULAR_BLUE;
-        char *regular_color = in_exclude_list ? REGULAR_MAGENTA : REGULAR_BLUE;
-        print_line(depth, print_name, bold_color, regular_color, 0, reason, s);
+        char *bold_color = in_exclude_list
+                               ? REGULAR_MAGENTA
+                               : seen_before ? REGULAR_BLUE : BOLD_CYAN;
+        char *regular_color = in_exclude_list
+                                  ? REGULAR_MAGENTA
+                                  : seen_before ? REGULAR_BLUE : BOLD_CYAN;
+        int highlight = !seen_before && !in_exclude_list;
+        print_line(depth, print_name, bold_color, regular_color, highlight,
+                   reason, s);
 
         s->string_table.n = old_buf_size;
         fclose(fptr);
@@ -1647,6 +1654,7 @@ int main(int argc, char **argv) {
     s.color = getenv("NO_COLOR") == NULL && isatty(STDOUT_FILENO);
     s.verbosity = 0;
     s.path = 0;
+    s.max_depth = MAX_RECURSION_DEPTH;
 
     // We want to end up with an array of file names
     // in argv[1] up to argv[positional-1].
@@ -1713,6 +1721,14 @@ int main(int argc, char **argv) {
                     return 1;
                 }
                 s.ld_conf_file = argv[++i];
+            } else if (strcmp(arg, "max-depth") == 0) {
+                // Require a value
+                if (i + 1 == argc) {
+                    fputs("Expected value after `--max-depth`\n", stderr);
+                    return 1;
+                }
+                char *ptr;
+                s.max_depth = strtoul(argv[++i], &ptr, 10);
             } else {
                 fputs("Unrecognized flag `--", stderr);
                 fputs(arg, stderr);
@@ -1767,6 +1783,7 @@ int main(int argc, char **argv) {
               "  --ldconf <path>  Config file for extra search paths [", stdout);
         fputs(s.ld_conf_file, stdout);
         fputs("]\n"
+              "  --max-depth <n>  Limit library traversal to at most n levels of depth\n"
               "\n"
               "* For brevity, the following libraries are not shown by default:\n"
               "  ",

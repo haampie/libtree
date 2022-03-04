@@ -1,3 +1,8 @@
+# v3.1.0
+- Add a `--max-depth` flag to limit recursion depth. For example,
+  `libtree --max-depth 1 <file>` will show the resolved paths of direct dependencies
+  only.
+
 # v3.0.0
 - Rewritten in C99 with 0 external dependencies.
 - Significantly faster & smaller (~50KB statically compiled with musl libc, or
