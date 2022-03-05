@@ -19,17 +19,19 @@ Use the `--path` or `-p` flags to show paths rather than sonames:
 
 - `libtree -p $(which tar)`
 
+Use `--max-depth` to limit the recursion depth.
+
 
 ## Install
 
-- [Prebuilt binaries for **v3.0.3**](https://github.com/haampie/libtree/releases/tag/v3.0.3)
+- [Prebuilt binaries for **v3.1.0**](https://github.com/haampie/libtree/releases/tag/v3.1.0)
   | arch    | sha256sum |
   |---------|-----------|
-  | [aarch64 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.3/libtree_aarch64) | `6f5945b6fc2c7f82564f045054dbd04362567397f6ed6c816f161afd41067c21` |
-  | [armv6l (linux)](https://github.com/haampie/libtree/releases/download/v3.0.3/libtree_armv6l) | `aed70facf4987f6e320bd88fbd0d5be2b7453e485ac3eb8e365011f588761bfd` |
-  | [armv7l (linux)](https://github.com/haampie/libtree/releases/download/v3.0.3/libtree_armv7l) | `932284ce9897365f0623f4c802407aade63a8c6fd5cba523d20d77d683768fae` |
-  | [i686 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.3/libtree_i686) | `9e451ff5bd5dd229b65c48354d7136a54816da527308189ed045cea40a552c82` |
-  | [x86_64 (linux)](https://github.com/haampie/libtree/releases/download/v3.0.3/libtree_x86_64) | `22ec893cc34892f88f25e42ba898314a480c7ab8456dcad2bdc1809e0e9d68b0` |
+  | [aarch64 (linux)](https://github.com/haampie/libtree/releases/download/v3.1.0/libtree_aarch64) | `c3d1e50801db8cd71427cccc00bb033211b68727ee5ff9858d5a22048fae4891` |
+  | [armv6l (linux)](https://github.com/haampie/libtree/releases/download/v3.1.0/libtree_armv6l) | `4608828d01c383fdf5c02535bcce70493955a38e46c1ae0a1063c667625d11da` |
+  | [armv7l (linux)](https://github.com/haampie/libtree/releases/download/v3.1.0/libtree_armv7l) | `9df3671b92151c01f37f3b38c1377dd2b179e559a033d9e23a22c669cc1cdae2` |
+  | [i686 (linux)](https://github.com/haampie/libtree/releases/download/v3.1.0/libtree_i686) | `fb83c54196d77bee4ba83c42f014e5b8fc359d8b02114387f7ad46fedc83faf5` |
+  | [x86_64 (linux)](https://github.com/haampie/libtree/releases/download/v3.1.0/libtree_x86_64) | `8d85183200300437b935574f259ed01efce4319eaec8525d87096c698a0f4c70` |
 - Fedora / RHEL / CentOS
   ```console
   $ dnf install epel-release # For RHEL and derivatives enable EPEL first 
