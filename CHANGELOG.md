@@ -2,6 +2,15 @@
 - Add a `--max-depth` flag to limit recursion depth. For example,
   `libtree --max-depth 1 <file>` will show the resolved direct dependencies only.
 
+# v3.0.2
+- Improve `make check`, `make clean` and CI
+- Preserve original timestamps when installing files
+- Add rpath order test
+
+# v3.0.1
+- Fix man pages directory in `make install`
+- Skip dynamic linker on aarch64 and powerpc
+
 # v3.0.0
 - Rewritten in C99 with 0 external dependencies.
 - Significantly faster & smaller (~50KB statically compiled with musl libc, or
