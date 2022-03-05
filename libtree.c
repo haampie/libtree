@@ -1204,15 +1204,17 @@ static int recurse(char *current_file, size_t depth, struct libtree_state_t *s,
 
     // Just print the library and return
     if (!should_recurse) {
-        char *print_name = soname != MAX_OFFSET_T && !s->path
-                               ? s->string_table.arr + soname_buf_offset
-                               : current_file;
+        char *print_name = soname == MAX_OFFSET_T || s->path
+                               ? current_file
+                               : (s->string_table.arr + soname_buf_offset);
+
         char *bold_color = in_exclude_list
                                ? REGULAR_MAGENTA
                                : seen_before ? REGULAR_BLUE : BOLD_CYAN;
         char *regular_color = in_exclude_list
                                   ? REGULAR_MAGENTA
-                                  : seen_before ? REGULAR_BLUE : BOLD_CYAN;
+                                  : seen_before ? REGULAR_BLUE : REGULAR_CYAN;
+
         int highlight = !seen_before && !in_exclude_list;
         print_line(depth, print_name, bold_color, regular_color, highlight,
                    reason, s);
