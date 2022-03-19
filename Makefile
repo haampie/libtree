@@ -1,6 +1,4 @@
-ifeq (exists, $(shell [ -e $(CURDIR)/Make.user ] && echo exists ))
-include $(CURDIR)/Make.user
-endif
+-include Make.user
 
 CFLAGS ?= -O2
 LIBTREE_CFLAGS := -std=c99 -Wall -Wextra -Wshadow -pedantic
@@ -14,11 +12,12 @@ SHAREDIR ?= $(PREFIX)/share
 
 all: libtree
 
-%.o: %.c
-	$(CC) $(CFLAGS) $(LIBTREE_CFLAGS) $(LIBTREE_DEFINES) -c $?
+.c.o:
+	$(CC) $(CFLAGS) $(LIBTREE_CFLAGS) $(LIBTREE_DEFINES) -c $<
 
-libtree: libtree.o
-	$(CC) $(LDFLAGS) $^ -o $@
+libtree-objs = libtree.o
+libtree: $(libtree-objs)
+	$(CC) $(LDFLAGS) -o $@ $(libtree-objs)
 
 check:: libtree
 
@@ -32,6 +31,6 @@ clean::
 	rm -f *.o libtree
 
 clean check::
-	for dir in $(sort $(wildcard tests/*)); do \
-		$(MAKE) -C $$dir $@ || break ;\
+	ls -1 -d tests/* | while read dir; do \
+		$(MAKE) -C "$$dir" $@ || break ;\
 	done
