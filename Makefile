@@ -19,13 +19,13 @@ libtree-objs = libtree.o
 libtree: $(libtree-objs)
 	$(CC) $(LDFLAGS) -o $@ $(libtree-objs)
 
-check:: libtree
-
 install: all
 	mkdir -p $(DESTDIR)$(BINDIR)
 	cp -p libtree $(DESTDIR)$(BINDIR)
 	mkdir -p $(DESTDIR)$(SHAREDIR)/man/man1
 	cp -p doc/libtree.1 $(DESTDIR)$(SHAREDIR)/man/man1
+
+check:: libtree
 
 clean::
 	rm -f *.o libtree
