@@ -17,7 +17,7 @@ exe: liba.so
 	echo 'int _start(){return f();}' | $(CC) -o $@ -Wl,--no-as-needed -Wl,--disable-new-dtags '-Wl,-rpath,$$ORIGIN' '-Wl,-rpath-link,$(CURDIR)' -Wno-implicit-function-declaration -nostdlib -L. -la -x c -
 
 check: exe liba.so
-	../../libtree liba.so || true # should not find libb.so
+	! ../../libtree liba.so # should not find libb.so
 	LD_LIBRARY_PATH=$(CURDIR) ../../libtree liba.so  # should find libb.so through LD_LIBRARY_PATH
 	../../libtree exe  # should find libb.so through exe's rpath
 

@@ -24,8 +24,8 @@ exe: a/libg.so b/libg.so
 	echo 'extern int g(); int _start(){return g();};' | $(CC) -Wl,-soname,$(notdir $@) '-Wl,-rpath,$${ORIGIN}/b' -o $@ -x c - -La -lg -nostdlib
 
 check: exe
-	../../libtree exe || true # should not find libf.so
-	LD_LIBRARY_PATH=$(CURDIR)/a ../../libtree exe || true # should not find libf.so
+	! ../../libtree exe # should not find libf.so
+	LD_LIBRARY_PATH=$(CURDIR)/a ../../libtree exe # should find libf.so
 
 clean:
 	rm -rf a b exe*
