@@ -1,4 +1,4 @@
-LD_LIBRARY_PATH:=
+LD_LIBRARY_PATH=
 
 .PHONY: clean
 
@@ -6,7 +6,7 @@ all: check
 
 some_dir/lib_f.so:
 	mkdir some_dir
-	echo 'int f(){return 42;}' | $(CC) -shared -Wl,-soname,$(notdir $@) -Wl,--no-as-needed -o $@ -x c -
+	echo 'int f(){return 42;}' | $(CC) -shared -Wl,-soname,$(@F) -Wl,--no-as-needed -o $@ -x c -
 
 lib_g.so: some_dir/lib_f.so
 	echo 'extern int f(); int g(){return f();}' | $(CC) -shared -Wl,-soname,$@ -Wl,--no-as-needed "-Wl,-rpath,$(CURDIR)/some_dir" -L./some_dir -l_f -o $@ -x c -
@@ -27,3 +27,4 @@ check: exe_a exe_b
 clean:
 	rm -rf *.so some_dir exe*
 
+CURDIR ?= $(.CURDIR)
