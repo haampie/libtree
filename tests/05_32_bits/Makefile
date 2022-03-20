@@ -8,12 +8,12 @@ LD_LIBRARY_PATH=
 all: check
 
 lib64/libx.so:
-	mkdir -p $(dir $@)
-	echo 'int a(){return 42;}' | $(CC) -shared -Wl,-soname,$(notdir $@) -m64 -o $@ -nostdlib -x c -
+	mkdir -p $(@D)
+	echo 'int a(){return 42;}' | $(CC) -shared -Wl,-soname,$(@F) -m64 -o $@ -nostdlib -x c -
 
 lib32/libx.so:
-	mkdir -p $(dir $@)
-	echo 'int a(){return 42;}' | $(CC) -shared -Wl,-soname,$(notdir $@) -m32 -o $@ -nostdlib -x c -
+	mkdir -p $(@D)
+	echo 'int a(){return 42;}' | $(CC) -shared -Wl,-soname,$(@F) -m32 -o $@ -nostdlib -x c -
 
 exe64: lib64/libx.so
 	echo 'extern int a(); int _start(){return a();}' | $(CC) -m64 "-Wl,-rpath,$(CURDIR)/lib32" "-Wl,-rpath,$(CURDIR)/lib64" -o $@ -nostdlib -x c - -Llib64 -lx

@@ -13,13 +13,13 @@ dir:
 	mkdir $@
 
 dir/liba.so: dir
-	echo 'int a(){return 42;}' | $(CC) -shared -Wl,-soname,$(notdir $@) -Wl,--no-as-needed -o $@ -nostdlib -x c -
+	echo 'int a(){return 42;}' | $(CC) -shared -Wl,-soname,$(@F) -Wl,--no-as-needed -o $@ -nostdlib -x c -
 
 dir/libb.so: dir/liba.so
-	echo 'int b(){return a();}' | $(CC) -shared -Wl,-soname,$(notdir $@) -Wl,--no-as-needed -Wl,--disable-new-dtags '-Wl,-rpath,$$ORIGIN' -Wno-implicit-function-declaration -o $@ -nostdlib dir/liba.so -x c -
+	echo 'int b(){return a();}' | $(CC) -shared -Wl,-soname,$(@F) -Wl,--no-as-needed -Wl,--disable-new-dtags '-Wl,-rpath,$$ORIGIN' -Wno-implicit-function-declaration -o $@ -nostdlib dir/liba.so -x c -
 
 libb.so:
-	echo 'int b(){return 10;}' | $(CC) -shared -Wl,-soname,$(notdir $@) -Wl,--no-as-needed -o $@ -Wno-implicit-function-declaration -nostdlib -x c -
+	echo 'int b(){return 10;}' | $(CC) -shared -Wl,-soname,$(@F) -Wl,--no-as-needed -o $@ -Wno-implicit-function-declaration -nostdlib -x c -
 
 exe_rpath: libb.so
 	echo 'int _start(){return b();}' | $(CC) -Wl,--no-as-needed -Wl,--disable-new-dtags "-Wl,-rpath,$(CURDIR)" libb.so -o $@ -Wno-implicit-function-declaration -nostdlib -x c -

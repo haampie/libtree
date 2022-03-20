@@ -9,19 +9,19 @@ LD_LIBRARY_PATH=
 all: check
 
 a/libf.so: 
-	mkdir -p $(dir $@)
-	echo 'int f(){return 3;};' | $(CC) -shared -Wl,-soname,$(notdir $@) -o $@ -x c - -nostdlib
+	mkdir -p $(@D)
+	echo 'int f(){return 3;};' | $(CC) -shared -Wl,-soname,$(@F) -o $@ -x c - -nostdlib
 
 a/libg.so: a/libf.so
-	mkdir -p $(dir $@)
-	echo 'extern int f(); int g(){return f();};' | $(CC) -shared -Wl,-soname,$(notdir $@) '-Wl,-rpath,$${ORIGIN}' -o $@ -x c - -La -lf -nostdlib
+	mkdir -p $(@D)
+	echo 'extern int f(); int g(){return f();};' | $(CC) -shared -Wl,-soname,$(@F) '-Wl,-rpath,$${ORIGIN}' -o $@ -x c - -La -lf -nostdlib
 
 b/libg.so: a/libg.so
-	mkdir -p $(dir $@)
+	mkdir -p $(@D)
 	ln -vs ../a/libg.so $@
 
 exe: a/libg.so b/libg.so
-	echo 'extern int g(); int _start(){return g();};' | $(CC) -Wl,-soname,$(notdir $@) '-Wl,-rpath,$${ORIGIN}/b' -o $@ -x c - -La -lg -nostdlib
+	echo 'extern int g(); int _start(){return g();};' | $(CC) -Wl,-soname,$(@F) '-Wl,-rpath,$${ORIGIN}/b' -o $@ -x c - -La -lg -nostdlib
 
 check: exe
 	! ../../libtree exe # should not find libf.so

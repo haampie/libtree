@@ -9,12 +9,12 @@ LD_LIBRARY_PATH=
 all: check
 
 first/libb.so: 
-	@mkdir -p $(dir $@)
-	echo 'int g(){return 1;}' | $(CC) -shared -Wl,-soname,$(notdir $@) -o $@ -x c -
+	@mkdir -p $(@D)
+	echo 'int g(){return 1;}' | $(CC) -shared -Wl,-soname,$(@F) -o $@ -x c -
 
 second/libb.so: 
-	@mkdir -p $(dir $@)
-	echo 'int g(){return 2;}' | $(CC) -shared -Wl,-soname,$(notdir $@) -o $@ -x c -
+	@mkdir -p $(@D)
+	echo 'int g(){return 2;}' | $(CC) -shared -Wl,-soname,$(@F) -o $@ -x c -
 
 liba.so: second/libb.so
 	echo 'extern int g(); int f(){return g();}' | $(CC) -shared -Wl,--disable-new-dtags -Wl,-soname,$@ -o $@ '-Wl,-rpath,$$ORIGIN/second' -x c - -Lsecond -lb
