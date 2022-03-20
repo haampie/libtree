@@ -6,7 +6,7 @@
 # version first in the search ath, and glibc fixes this lib
 # and simply errors).
 
-LD_LIBRARY_PATH:=
+LD_LIBRARY_PATH=
 
 .PHONY: clean
 

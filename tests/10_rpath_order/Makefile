@@ -2,7 +2,7 @@
 # {first,second}/libb.so and exe has an rpath to first, whereas liba.so has an
 # rpath to second
 
-LD_LIBRARY_PATH:=
+LD_LIBRARY_PATH=
 
 .PHONY: clean
 

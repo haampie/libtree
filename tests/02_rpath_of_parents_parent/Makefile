@@ -1,7 +1,7 @@
 # This creates exe <- liba.so <- libb.so
 # where liba.so cannot directly locate libb.so, but it *can* through exe's rpaths.
 
-LD_LIBRARY_PATH:=
+LD_LIBRARY_PATH=
 
 .PHONY: clean
 

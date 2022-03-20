@@ -1,8 +1,8 @@
 -include Make.user
 
 CFLAGS ?= -O2
-LIBTREE_CFLAGS := -std=c99 -Wall -Wextra -Wshadow -pedantic
-LIBTREE_DEFINES := -D_FILE_OFFSET_BITS=64
+LIBTREE_CFLAGS = -std=c99 -Wall -Wextra -Wshadow -pedantic
+LIBTREE_DEFINES = -D_FILE_OFFSET_BITS=64
 
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin

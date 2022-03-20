@@ -1,7 +1,7 @@
 # Test 32 bits exectuables and libraries
 # Make sure the 64 bits versions are not picked up.
 
-LD_LIBRARY_PATH:=
+LD_LIBRARY_PATH=
 
 .PHONY: clean
 

@@ -2,7 +2,7 @@
 # even if what we've found is a symlink.  So this test creates exe <- a/libf <-
 # a/libg and a symlink at b/libf to a/libf, where a/libf has ${ORIGIN} rpath.
 
-LD_LIBRARY_PATH:=
+LD_LIBRARY_PATH=
 
 .PHONY: clean
 

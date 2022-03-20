@@ -1,4 +1,4 @@
-LD_LIBRARY_PATH:=
+LD_LIBRARY_PATH=
 
 # test whether RUNPATH < LD_LIBRARY_PATH < RPATH
 # the exe's both need libb.so, but there are two of those:
