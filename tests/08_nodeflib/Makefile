@@ -13,7 +13,7 @@
 
 .PHONY: clean check
 
-LD_LIBRARY_PATH:=
+LD_LIBRARY_PATH=
 
 all: check
 
