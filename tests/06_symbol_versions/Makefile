@@ -18,11 +18,11 @@ all: check
 
 # this one is fine, link to v1, use v2 which provides the v1 symbol.
 exe_v1: main.c v1/libx.so v2/libx.so
-	$(CC) -o $@ $< $(word 2,$^) "-Wl,-rpath,$(CURDIR)/$(dir $(word 3,$^))" "-Wl,-rpath,$(CURDIR)/$(dir $(word 2,$^))"
+	$(CC) -o $@ main.c $(word 2,$^) "-Wl,-rpath,$(CURDIR)/$(dir $(word 3,$^))" "-Wl,-rpath,$(CURDIR)/$(dir $(word 2,$^))"
 
 # this one is not fine, link to v2, use v1 which does not provide the v2 symbol
 exe_v2: main.c v1/libx.so v2/libx.so
-	$(CC) -o $@ $< $(word 3,$^) "-Wl,-rpath,$(CURDIR)/$(dir $(word 2,$^))" "-Wl,-rpath,$(CURDIR)/$(dir $(word 3,$^))"
+	$(CC) -o $@ main.c $(word 3,$^) "-Wl,-rpath,$(CURDIR)/$(dir $(word 2,$^))" "-Wl,-rpath,$(CURDIR)/$(dir $(word 3,$^))"
 
 check: exe_v1 exe_v2
 	../../libtree $(word 1,$^)

@@ -18,7 +18,7 @@ a/libg.so: a/libf.so
 
 b/libg.so: a/libg.so
 	mkdir -p $(dir $@)
-	ln -vs ../$< $@
+	ln -vs ../a/libg.so $@
 
 exe: a/libg.so b/libg.so
 	echo 'extern int g(); int _start(){return g();};' | $(CC) -Wl,-soname,$(notdir $@) '-Wl,-rpath,$${ORIGIN}/b' -o $@ -x c - -La -lg -nostdlib

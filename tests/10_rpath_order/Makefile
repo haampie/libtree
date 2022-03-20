@@ -17,10 +17,10 @@ second/libb.so:
 	echo 'int g(){return 2;}' | $(CC) -shared -Wl,-soname,$(notdir $@) -o $@ -x c -
 
 liba.so: second/libb.so
-	echo 'extern int g(); int f(){return g();}' | $(CC) -shared -Wl,--disable-new-dtags -Wl,-soname,$@ -o $@ '-Wl,-rpath,$$ORIGIN/$(dir $<)' -x c - -L$(dir $<) -lb
+	echo 'extern int g(); int f(){return g();}' | $(CC) -shared -Wl,--disable-new-dtags -Wl,-soname,$@ -o $@ '-Wl,-rpath,$$ORIGIN/second' -x c - -Lsecond -lb
 
 exe: first/libb.so liba.so
-	echo 'extern int f(); int main(){return f();}' | $(CC) -o $@ -Wl,--disable-new-dtags '-Wl,-rpath,$$ORIGIN,-rpath,$$ORIGIN/$(dir $<)' -x c - -L. -la
+	echo 'extern int f(); int main(){return f();}' | $(CC) -o $@ -Wl,--disable-new-dtags '-Wl,-rpath,$$ORIGIN,-rpath,$$ORIGIN/first' -x c - -L. -la
 
 check: exe liba.so
 	../../libtree -p liba.so  # should find second/libb.so, not first/libb.so
