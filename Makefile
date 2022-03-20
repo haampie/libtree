@@ -31,6 +31,6 @@ clean::
 	rm -f *.o libtree
 
 clean check::
-	find tests -type d -mindepth 1 -maxdepth 1 | while read -r dir; do \
-		$(MAKE) -C "$$dir" $@ || break ;\
+	find tests -mindepth 1 -maxdepth 1 -type d | while read -r dir; do \
+		$(MAKE) -C "$$dir" $@ || exit 1 ;\
 	done
