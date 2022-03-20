@@ -33,3 +33,4 @@ check: exe_v1 exe_v2
 clean:
 	rm -rf v1 v2 exe*
 
+CURDIR ?= $(.CURDIR)

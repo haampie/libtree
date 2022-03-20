@@ -28,3 +28,4 @@ check: exe32 exe64
 clean:
 	rm -rf lib32 lib64 exe*
 
+CURDIR ?= $(.CURDIR)

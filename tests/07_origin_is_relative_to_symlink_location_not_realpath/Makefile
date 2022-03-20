@@ -30,3 +30,4 @@ check: exe
 clean:
 	rm -rf a b exe*
 
+CURDIR ?= $(.CURDIR)

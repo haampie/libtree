@@ -23,3 +23,5 @@ check: exe liba.so
 
 clean:
 	rm -f *.so exe*
+
+CURDIR ?= $(.CURDIR)

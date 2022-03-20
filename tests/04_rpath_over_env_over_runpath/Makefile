@@ -36,3 +36,4 @@ check: exe_rpath exe_runpath dir/libb.so
 clean:
 	rm -rf *.so dir exe*
 
+CURDIR ?= $(.CURDIR)

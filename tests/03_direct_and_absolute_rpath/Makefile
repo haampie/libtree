@@ -27,3 +27,4 @@ check: exe_a exe_b
 clean:
 	rm -rf *.so some_dir exe*
 
+CURDIR ?= $(.CURDIR)
