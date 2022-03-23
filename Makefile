@@ -4,7 +4,10 @@ CFLAGS ?= -O2
 LIBTREE_CFLAGS = -std=c99 -Wall -Wextra -Wshadow -pedantic
 LIBTREE_DEFINES = -D_FILE_OFFSET_BITS=64
 
-prefix = /usr/local
+# uppercase variables for backwards compatibility only:
+PREFIX = /usr/local
+
+prefix = $(PREFIX)
 exec_prefix = $(prefix)
 bindir = $(exec_prefix)/bin
 datarootdir = $(prefix)/share
