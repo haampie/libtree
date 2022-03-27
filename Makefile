@@ -1,5 +1,3 @@
--include Make.user
-
 CFLAGS ?= -O2
 LIBTREE_CFLAGS = -std=c99 -Wall -Wextra -Wshadow -pedantic
 LIBTREE_DEFINES = -D_FILE_OFFSET_BITS=64
@@ -39,3 +37,5 @@ clean check::
 	find tests -mindepth 1 -maxdepth 1 -type d | while read -r dir; do \
 		$(MAKE) -C "$$dir" $@ || exit 1 ;\
 	done
+
+-include Make.user
