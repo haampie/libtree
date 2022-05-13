@@ -1,3 +1,7 @@
+# v3.1.1
+- Build system portability fixes
+- Fix `make check` exit code
+
 # v3.1.0
 - Add a `--max-depth` flag to limit recursion depth. For example,
   `libtree --max-depth 1 <file>` will show the resolved paths of direct dependencies
