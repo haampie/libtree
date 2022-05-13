@@ -1,3 +1,7 @@
+# v3.0.4
+- Build system portability fixes
+- Fix `make check` exit code
+
 # v3.0.3
 - `libtree -vvvv...` is now treated as `libtree -vvv`.
 
