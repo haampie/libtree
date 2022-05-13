@@ -24,14 +24,14 @@ Use `--max-depth` to limit the recursion depth.
 
 ## Install
 
-- [Prebuilt binaries for **v3.1.0**](https://github.com/haampie/libtree/releases/tag/v3.1.0)
+- [Prebuilt binaries for **v3.1.1**](https://github.com/haampie/libtree/releases/tag/v3.1.1)
   | arch    | sha256sum |
   |---------|-----------|
-  | [aarch64 (linux)](https://github.com/haampie/libtree/releases/download/v3.1.0/libtree_aarch64) | `c3d1e50801db8cd71427cccc00bb033211b68727ee5ff9858d5a22048fae4891` |
-  | [armv6l (linux)](https://github.com/haampie/libtree/releases/download/v3.1.0/libtree_armv6l) | `4608828d01c383fdf5c02535bcce70493955a38e46c1ae0a1063c667625d11da` |
-  | [armv7l (linux)](https://github.com/haampie/libtree/releases/download/v3.1.0/libtree_armv7l) | `9df3671b92151c01f37f3b38c1377dd2b179e559a033d9e23a22c669cc1cdae2` |
-  | [i686 (linux)](https://github.com/haampie/libtree/releases/download/v3.1.0/libtree_i686) | `fb83c54196d77bee4ba83c42f014e5b8fc359d8b02114387f7ad46fedc83faf5` |
-  | [x86_64 (linux)](https://github.com/haampie/libtree/releases/download/v3.1.0/libtree_x86_64) | `8d85183200300437b935574f259ed01efce4319eaec8525d87096c698a0f4c70` |
+  | [aarch64 (linux)](https://github.com/haampie/libtree/releases/download/v3.1.1/libtree_aarch64) | `c5d4fbcd4e3fb46f02c028532f60fcf1c92f7c6aad5b07a991c67550c2554862` |
+  | [armv6l (linux)](https://github.com/haampie/libtree/releases/download/v3.1.1/libtree_armv6l) | `16f5a7503a095bd88ebc5e21ec4ba8337c5d9712cac355bf89399c9e6beef661` |
+  | [armv7l (linux)](https://github.com/haampie/libtree/releases/download/v3.1.1/libtree_armv7l) | `17f493621e7cc651e2bddef207c1554a64a114e1c907dbe5b79ff0e97180b29e` |
+  | [i686 (linux)](https://github.com/haampie/libtree/releases/download/v3.1.1/libtree_i686) | `230a163c20f4a88a983d8647a9aa793317be6556e2c6a79e8a6295389e651ef5` |
+  | [x86_64 (linux)](https://github.com/haampie/libtree/releases/download/v3.1.1/libtree_x86_64) | `49218482f89648972ea4ef38cf986e85268efd1ce8f27fe14b23124bca009e6f` |
 - Fedora / RHEL / CentOS
   ```console
   $ dnf install epel-release # For RHEL and derivatives enable EPEL first 
