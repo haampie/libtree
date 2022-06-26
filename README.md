@@ -41,6 +41,12 @@ Use `--max-depth` to limit the recursion depth.
   ```console
   apt-get install libtree
   ```
+
+- [GNU Guix](https://guix.gnu.org/)
+  ```console
+  guix install libtree
+  ```
+
 - [Older release **v2.0.0**](https://github.com/haampie/libtree/releases/tag/v2.0.0)
 
 
