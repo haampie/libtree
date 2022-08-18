@@ -2,11 +2,13 @@
 # Make sure the 64 bits versions are not picked up.
 
 LD_LIBRARY_PATH=
+CPU_ARCH=$(shell uname -m)
 
 .PHONY: clean
 
 all: check
 
+ifeq ($(CPU_ARCH), $(filter x86_64 amd64 i686 i386 ppc% sparc64,$(CPU_ARCH)))
 lib64/libx.so:
 	mkdir -p $(@D)
 	echo 'int a(){return 42;}' | $(CC) -shared -Wl,-soname,$(@F) -m64 -o $@ -nostdlib -x c -
@@ -24,6 +26,11 @@ exe32: lib32/libx.so
 check: exe32 exe64
 	../../libtree exe32
 	../../libtree exe64
+
+else
+check:
+	@echo Architecture does not support -m32 or -m64 options. Do nothing.
+endif
 
 clean:
 	rm -rf lib32 lib64 exe*
