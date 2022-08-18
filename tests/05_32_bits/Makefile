@@ -29,7 +29,7 @@ check: exe32 exe64
 
 else
 check:
-	echo Architecture does not support -m32 or -m64 options. Do nothing.
+	@echo Architecture does not support -m32 or -m64 options. Do nothing.
 endif
 
 clean:
