@@ -7,13 +7,13 @@ LD_LIBRARY_PATH=
 all: check
 
 liba.so: 
-	echo 'int f(){return 1;}' | $(CC) -shared -Wl,-soname,$@ -o $@ -nostdlib -x c -
+	echo 'int f(void){return 1;}' | $(CC) -shared -Wl,-soname,$@ -o $@ -nostdlib -x c -
 
 exe_rpath: liba.so
-	echo 'int _start(){return f();}' | $(CC) -o $@ -Wl,--no-as-needed -Wl,--disable-new-dtags '-Wl,-rpath,$$ORIGIN' -Wno-implicit-function-declaration -nostdlib liba.so -x c -
+	echo 'int f(void); int _start(void){return f();}' | $(CC) -o $@ -Wl,--no-as-needed -Wl,--disable-new-dtags '-Wl,-rpath,$$ORIGIN' -Wno-implicit-function-declaration -nostdlib liba.so -x c -
 
 exe_runpath: liba.so
-	echo 'int _start(){return f();}' | $(CC) -o $@ -Wl,--no-as-needed -Wl,--enable-new-dtags '-Wl,-rpath,$$ORIGIN' -Wno-implicit-function-declaration -nostdlib liba.so -x c -
+	echo 'int f(void); int _start(void){return f();}' | $(CC) -o $@ -Wl,--no-as-needed -Wl,--enable-new-dtags '-Wl,-rpath,$$ORIGIN' -Wno-implicit-function-declaration -nostdlib liba.so -x c -
 
 check: exe_rpath exe_runpath
 	../../libtree exe_rpath
