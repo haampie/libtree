@@ -8,13 +8,13 @@ LD_LIBRARY_PATH=
 all: check
 
 libb.so: 
-	echo 'int g(){return 1;}' | $(CC) -shared -Wl,-soname,$@ -o $@ -nostdlib -x c -
+	echo 'int g(void){return 1;}' | $(CC) -shared -Wl,-soname,$@ -o $@ -nostdlib -x c -
 
 liba.so: libb.so
-	echo 'int f(){return g();}' | $(CC) -shared -Wl,--no-as-needed -Wl,-soname,$@ -o $@ -Wno-implicit-function-declaration libb.so -nostdlib -x c -
+	echo 'int g(void); int f(void){return g();}' | $(CC) -shared -Wl,--no-as-needed -Wl,-soname,$@ -o $@ -Wno-implicit-function-declaration libb.so -nostdlib -x c -
 
 exe: liba.so
-	echo 'int _start(){return f();}' | $(CC) -o $@ -Wl,--no-as-needed -Wl,--disable-new-dtags '-Wl,-rpath,$$ORIGIN' '-Wl,-rpath-link,$(CURDIR)' -Wno-implicit-function-declaration -nostdlib -L. -la -x c -
+	echo 'int f(void); int _start(){return f();}' | $(CC) -o $@ -Wl,--no-as-needed -Wl,--disable-new-dtags '-Wl,-rpath,$$ORIGIN' '-Wl,-rpath-link,$(CURDIR)' -Wno-implicit-function-declaration -nostdlib -L. -la -x c -
 
 check: exe liba.so
 	! ../../libtree liba.so # should not find libb.so
