@@ -3,7 +3,7 @@
 
 LD_LIBRARY_PATH=
 
-.PHONY: clean
+.PHONY: clean check
 
 all: check
 
@@ -21,11 +21,21 @@ exe64: lib64/libx.so
 exe32: lib32/libx.so
 	echo 'extern int a(); int _start(){return a();}' | $(CC) -m32 "-Wl,-rpath,$(CURDIR)/lib64" "-Wl,-rpath,$(CURDIR)/lib32" -o $@ -nostdlib -x c - -Llib32 -lx
 
-check: exe32 exe64
-	../../libtree exe32
-	../../libtree exe64
-
 clean:
 	rm -rf lib32 lib64 exe*
 
 CURDIR ?= $(.CURDIR)
+
+test-flag = 2>/dev/null ${CC} -E /dev/null
+test-end = && echo y || echo n
+support-m32 != ${test-flag} -m32 ${test-end}
+support-m64 != ${test-flag} -m64 ${test-end}
+
+check${support-m32:y=}:: exe32
+	../../libtree exe32
+
+check${support-m64:y=}:: exe64
+	../../libtree exe64
+
+check${support-m32:n=} check${support-m64:n=}::
+	@echo WARNING: test skipped at ${CURDIR}
